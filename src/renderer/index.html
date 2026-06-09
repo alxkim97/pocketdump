@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PocketDump</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top-bar">
+    <div>
+      <h1>PocketDump</h1>
+      <p class="subtitle">Send photos &amp; videos from your iPhone over WiFi</p>
+    </div>
+    <button id="theme-toggle" class="link" type="button"></button>
+  </header>
+
+  <section class="card">
+    <h2>1. Choose a destination folder</h2>
+    <button id="choose-folder">Choose folder…</button>
+    <p id="folder-path" class="muted">No folder selected yet</p>
+    <button id="open-folder" class="link" style="display:none">Open folder</button>
+    <div class="rebuild-row">
+      <button id="rebuild-index" class="link" style="display:none">Rebuild duplicate index</button>
+      <p id="rebuild-status" class="muted"></p>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>2. Scan with your iPhone</h2>
+    <p class="muted">Open the Camera app on your iPhone and scan this code, or open the link in Safari (same WiFi network required).</p>
+    <img id="qr" alt="QR code" />
+    <p id="server-url" class="muted"></p>
+    <label for="network-select" class="muted">If the QR code doesn't connect, pick a different network:</label>
+    <select id="network-select"></select>
+  </section>
+
+  <section class="card">
+    <h2>3. Transfer status</h2>
+    <p class="status-line">
+      <span id="status-dot" class="status-dot"></span>
+      <span id="status-text">Idle — waiting for your iPhone</span>
+    </p>
+    <p class="muted">Files are sorted automatically into dated folders (YYYY-MM-DD) and duplicates are skipped.</p>
+    <ul id="upload-log"></ul>
+  </section>
+
+  <footer id="app-footer" class="muted"></footer>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

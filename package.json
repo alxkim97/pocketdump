@@ -1,0 +1,40 @@
+{
+  "name": "pocketdump",
+  "version": "0.4.0",
+  "description": "Transfer photos and videos from iPhone to PC over local WiFi",
+  "author": "Alex Kim",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.0.0",
+    "qrcode": "^1.5.3"
+  },
+  "devDependencies": {
+    "electron": "^42.0.0",
+    "electron-builder": "^26.15.2"
+  },
+  "build": {
+    "appId": "com.alexkim.pocketdump",
+    "productName": "PocketDump",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "src/assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

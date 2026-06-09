@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PocketDump</title>
+  <style>
+    * { box-sizing: border-box; }
+    :root {
+      --bg: #f4f5f7;
+      --card-bg: #ffffff;
+      --text: #1c1c1e;
+      --muted: #6e6e73;
+      --accent: #0a84ff;
+      --border: #e5e5ea;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --card-bg: #2a2a2d;
+        --text: #f2f2f7;
+        --muted: #a0a0a6;
+        --accent: #409cff;
+        --border: #3a3a3d;
+      }
+    }
+    body {
+      font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+      margin: 0;
+      padding: 24px;
+      background: var(--bg);
+      color: var(--text);
+      text-align: center;
+    }
+    h1 { margin: 0 0 4px; }
+    p { color: var(--muted); font-size: 14px; }
+    label {
+      display: inline-block;
+      margin-top: 16px;
+      background: var(--accent);
+      color: #fff;
+      border-radius: 10px;
+      padding: 14px 28px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    input[type="file"] { display: none; }
+    #progress-card {
+      display: none;
+      margin-top: 20px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 16px;
+      text-align: left;
+    }
+    #overall { font-size: 14px; font-weight: 600; }
+    #current-file { font-size: 13px; color: var(--muted); margin-top: 2px; }
+    #bar-track { height: 8px; background: var(--border); border-radius: 4px; margin-top: 10px; overflow: hidden; }
+    #bar-fill { height: 100%; width: 0%; background: var(--accent); transition: width 0.15s ease; }
+    #summary { margin-top: 14px; font-size: 14px; font-weight: 600; }
+    #log {
+      margin-top: 8px;
+      max-height: 160px;
+      overflow-y: auto;
+      font-size: 12px;
+      color: var(--muted);
+      text-align: left;
+    }
+    #log div { padding: 2px 0; border-bottom: 1px solid var(--border); }
+  </style>
+</head>
+<body>
+  <h1>PocketDump</h1>
+  <p>Pick photos &amp; videos to send to your PC.</p>
+
+  <label for="file-input">Choose photos &amp; videos</label>
+  <input id="file-input" type="file" accept="image/*,video/*" multiple />
+
+  <div id="progress-card">
+    <div id="overall"></div>
+    <div id="current-file"></div>
+    <div id="bar-track"><div id="bar-fill"></div></div>
+    <div id="summary"></div>
+    <div id="log"></div>
+  </div>
+
+  <script>
+    const input = document.getElementById('file-input');
+    const card = document.getElementById('progress-card');
+    const overallEl = document.getElementById('overall');
+    const currentFileEl = document.getElementById('current-file');
+    const barFill = document.getElementById('bar-fill');
+    const summaryEl = document.getElementById('summary');
+    const logEl = document.getElementById('log');
+
+    input.addEventListener('change', () => {
+      const files = Array.from(input.files);
+      if (files.length === 0) return;
+      uploadSequentially(files);
+    });
+
+    function formatSize(bytes) {
+      if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function logLine(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      logEl.prepend(div);
+    }
+
+    function uploadOne(file) {
+      return new Promise((resolve, reject) => {
+        const formData = new FormData();
+        formData.append('file', file, file.name);
+        formData.append('lastModified', String(file.lastModified));
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/upload');
+
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            barFill.style.width = `${Math.round((e.loaded / e.total) * 100)}%`;
+          }
+        });
+
+        xhr.onload = () => {
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.error) reject(new Error(data.error));
+            else resolve(data);
+          } catch {
+            reject(new Error('Unexpected response from PC'));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Network error — check WiFi connection'));
+
+        xhr.send(formData);
+      });
+    }
+
+    async function uploadSequentially(files) {
+      card.style.display = 'block';
+      summaryEl.textContent = '';
+      logEl.innerHTML = '';
+
+      let saved = 0;
+      let duplicates = 0;
+      let failed = 0;
+
+      for (let i = 0; i < files.length; i += 1) {
+        const file = files[i];
+        overallEl.textContent = `Sending ${i + 1} of ${files.length}`;
+        currentFileEl.textContent = `${file.name} · ${formatSize(file.size)}`;
+        barFill.style.width = '0%';
+
+        try {
+          const result = await uploadOne(file);
+          if (result.status === 'saved') {
+            saved += 1;
+            logLine(`${file.name} → saved to ${result.folder}`);
+          } else {
+            duplicates += 1;
+            logLine(`${file.name} → already on PC, skipped`);
+          }
+        } catch (err) {
+          failed += 1;
+          logLine(`${file.name} → failed (${err.message})`);
+        }
+      }
+
+      overallEl.textContent = '';
+      currentFileEl.textContent = '';
+      barFill.style.width = '0%';
+
+      const parts = [`${saved} saved`];
+      if (duplicates) parts.push(`${duplicates} already on PC`);
+      if (failed) parts.push(`${failed} failed`);
+      summaryEl.textContent = `Done — ${parts.join(', ')}.`;
+
+      input.value = '';
+    }
+  </script>
+</body>
+</html>
