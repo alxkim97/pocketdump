@@ -5,6 +5,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 const MANIFEST_NAME = '.pocketdump-manifest.json';
+const META_KEY = '__meta';
 
 function loadManifest(folder) {
   const manifestPath = path.join(folder, MANIFEST_NAME);
@@ -26,6 +27,15 @@ function dateFolderName(timestamp) {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+// file.originalname comes straight from the client and is otherwise
+// attacker-controlled (e.g. "../../../Startup/evil.exe") — strip it down
+// to a bare filename before it ever touches the filesystem.
+function sanitizeFileName(name) {
+  const base = path.basename(String(name || ''));
+  if (!base || base === '.' || base === '..') return `file-${Date.now()}`;
+  return base;
 }
 
 function uniqueFilePath(dir, fileName) {
@@ -58,29 +68,61 @@ function startServer({ port, getDestinationFolder, onUpload }) {
     }
 
     const file = req.file;
+    const safeName = sanitizeFileName(file.originalname);
+    const lastModified = Number(req.body.lastModified) || Date.now();
     const hash = crypto.createHash('sha1').update(file.buffer).digest('hex');
     const manifest = loadManifest(destinationFolder);
 
     let result;
     if (manifest[hash]) {
-      result = { name: file.originalname, status: 'duplicate', size: file.size };
+      result = { name: safeName, status: 'duplicate', size: file.size };
     } else {
-      const lastModified = Number(req.body.lastModified) || Date.now();
       const folderName = dateFolderName(lastModified);
       const targetDir = path.join(destinationFolder, folderName);
       fs.mkdirSync(targetDir, { recursive: true });
 
-      const targetPath = uniqueFilePath(targetDir, file.originalname);
+      const targetPath = uniqueFilePath(targetDir, safeName);
       fs.writeFileSync(targetPath, file.buffer);
 
-      manifest[hash] = path.relative(destinationFolder, targetPath);
-      saveManifest(destinationFolder, manifest);
+      manifest[hash] = {
+        path: path.relative(destinationFolder, targetPath),
+        name: safeName,
+        size: file.size,
+        lastModified
+      };
 
-      result = { name: file.originalname, status: 'saved', folder: folderName, size: file.size };
+      result = { name: safeName, status: 'saved', folder: folderName, size: file.size };
     }
+
+    manifest[META_KEY] = { lastSyncAt: Date.now() };
+    saveManifest(destinationFolder, manifest);
 
     if (onUpload) onUpload(result);
     res.json(result);
+  });
+
+  // Lets the phone show "last synced X ago" and pre-skip files it already
+  // sent, without uploading the full file just to discover that via hash.
+  app.get('/sync-info', (req, res) => {
+    const destinationFolder = getDestinationFolder();
+    if (!destinationFolder) {
+      return res.json({ lastSyncAt: null, count: 0, signatures: [] });
+    }
+
+    const manifest = loadManifest(destinationFolder);
+    const meta = manifest[META_KEY] || {};
+    const signatures = [];
+    let count = 0;
+
+    for (const [key, value] of Object.entries(manifest)) {
+      if (key === META_KEY) continue;
+      count += 1;
+      if (value && typeof value === 'object' && value.name && value.size != null && value.lastModified != null) {
+        signatures.push(`${value.name}|${value.size}|${value.lastModified}`);
+      }
+    }
+
+    res.json({ lastSyncAt: meta.lastSyncAt || null, count, signatures });
   });
 
   // Catches uploads interrupted mid-transfer (e.g. the phone's screen locks
@@ -103,7 +145,9 @@ function stopServer(server) {
 // keyed by content hash. Useful after manually moving/renaming files, since
 // the manifest otherwise only tracks files PocketDump itself has written.
 function rebuildIndex(folder) {
+  const existing = loadManifest(folder);
   const manifest = {};
+  if (existing[META_KEY]) manifest[META_KEY] = existing[META_KEY];
   let count = 0;
 
   function walk(dir) {
@@ -115,7 +159,13 @@ function rebuildIndex(folder) {
       } else {
         const buffer = fs.readFileSync(fullPath);
         const hash = crypto.createHash('sha1').update(buffer).digest('hex');
-        manifest[hash] = path.relative(folder, fullPath);
+        const stat = fs.statSync(fullPath);
+        manifest[hash] = {
+          path: path.relative(folder, fullPath),
+          name: entry.name,
+          size: stat.size,
+          lastModified: stat.mtimeMs
+        };
         count += 1;
       }
     }

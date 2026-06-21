@@ -90,7 +90,8 @@ window.pocketdump.onUploadEvent((item) => {
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
-  themeToggleBtn.textContent = theme === 'dark' ? '☀️ Light mode' : '🌙 Dark mode';
+  themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
+  themeToggleBtn.title = theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode';
 }
 
 const storedTheme = localStorage.getItem('pocketdump-theme') || 'light';

@@ -72,6 +72,7 @@
 <body>
   <h1>PocketDump</h1>
   <p>Pick photos &amp; videos to send to your PC.</p>
+  <p id="sync-info" style="display:none"></p>
 
   <label for="file-input">Choose photos &amp; videos</label>
   <input id="file-input" type="file" accept="image/*,video/*" multiple />
@@ -92,6 +93,39 @@
     const barFill = document.getElementById('bar-fill');
     const summaryEl = document.getElementById('summary');
     const logEl = document.getElementById('log');
+    const syncInfoEl = document.getElementById('sync-info');
+
+    let knownSignatures = new Set();
+
+    function fileSignature(file) {
+      return `${file.name}|${file.size}|${file.lastModified}`;
+    }
+
+    function formatRelativeTime(ts) {
+      const mins = Math.round((Date.now() - ts) / 60000);
+      if (mins < 1) return 'just now';
+      if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`;
+      const hours = Math.round(mins / 60);
+      if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+      const days = Math.round(hours / 24);
+      return `${days} day${days === 1 ? '' : 's'} ago`;
+    }
+
+    async function loadSyncInfo() {
+      try {
+        const res = await fetch('/sync-info');
+        const data = await res.json();
+        knownSignatures = new Set(data.signatures || []);
+        if (data.lastSyncAt) {
+          syncInfoEl.textContent = `Last synced ${formatRelativeTime(data.lastSyncAt)} · ${data.count} file${data.count === 1 ? '' : 's'} saved so far`;
+          syncInfoEl.style.display = 'block';
+        }
+      } catch {
+        // Non-critical — picking and uploading still works without this.
+      }
+    }
+
+    loadSyncInfo();
 
     input.addEventListener('change', () => {
       const files = Array.from(input.files);
@@ -155,10 +189,18 @@
         currentFileEl.textContent = `${file.name} · ${formatSize(file.size)}`;
         barFill.style.width = '0%';
 
+        if (knownSignatures.has(fileSignature(file))) {
+          duplicates += 1;
+          barFill.style.width = '100%';
+          logLine(`${file.name} → already on PC, skipped (no upload needed)`);
+          continue;
+        }
+
         try {
           const result = await uploadOne(file);
           if (result.status === 'saved') {
             saved += 1;
+            knownSignatures.add(fileSignature(file));
             logLine(`${file.name} → saved to ${result.folder}`);
           } else {
             duplicates += 1;
