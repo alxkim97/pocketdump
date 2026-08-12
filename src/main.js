@@ -8,6 +8,7 @@ const { startServer, stopServer, rebuildIndex } = require('./server');
 const PORT = 8989;
 let mainWindow;
 let destinationFolder = null;
+let sourceFolder = null;
 let serverInstance = null;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
@@ -26,6 +27,10 @@ function saveSettings(settings) {
 
 function notifyFolder() {
   mainWindow.webContents.send('folder-info', { folder: destinationFolder });
+}
+
+function notifySourceFolder() {
+  mainWindow.webContents.send('source-folder-info', { folder: sourceFolder });
 }
 
 function listIPv4Candidates() {
@@ -93,13 +98,19 @@ async function createWindow() {
   if (settings.destinationFolder && fs.existsSync(settings.destinationFolder)) {
     destinationFolder = settings.destinationFolder;
   }
+  if (settings.sourceFolder && fs.existsSync(settings.sourceFolder)) {
+    sourceFolder = settings.sourceFolder;
+  }
   notifyFolder();
+  notifySourceFolder();
 
   // Start listening immediately so the QR code is connectable right away;
-  // /upload returns a friendly error until a destination folder is chosen.
+  // /upload returns a friendly error until a destination folder is chosen,
+  // and /browse + /file do the same until a source folder is shared.
   serverInstance = startServer({
     port: PORT,
     getDestinationFolder: () => destinationFolder,
+    getSourceFolder: () => sourceFolder,
     onUpload: (info) => mainWindow.webContents.send('upload-event', info)
   });
 
@@ -126,6 +137,22 @@ ipcMain.handle('choose-folder', async () => {
 
 ipcMain.handle('open-folder', () => {
   if (destinationFolder) shell.openPath(destinationFolder);
+});
+
+ipcMain.handle('choose-source-folder', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ['openDirectory']
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return sourceFolder;
+  }
+  sourceFolder = result.filePaths[0];
+  saveSettings({ ...loadSettings(), sourceFolder });
+  return sourceFolder;
+});
+
+ipcMain.handle('open-source-folder', () => {
+  if (sourceFolder) shell.openPath(sourceFolder);
 });
 
 ipcMain.handle('rebuild-index', () => {

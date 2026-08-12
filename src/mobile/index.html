@@ -34,7 +34,34 @@
     }
     h1 { margin: 0 0 4px; }
     p { color: var(--muted); font-size: 14px; }
-    label {
+
+    .tabs {
+      display: flex;
+      margin: 20px 0;
+      border-radius: 10px;
+      background: var(--card-bg);
+      padding: 4px;
+      gap: 4px;
+    }
+    .tab-btn {
+      flex: 1;
+      border: none;
+      background: none;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 600;
+      padding: 10px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .panel { display: none; text-align: left; }
+    .panel.active { display: block; }
+
+    label.picker {
       display: inline-block;
       margin-top: 16px;
       background: var(--accent);
@@ -43,6 +70,7 @@
       padding: 14px 28px;
       font-size: 16px;
       cursor: pointer;
+      text-align: center;
     }
     input[type="file"] { display: none; }
     #progress-card {
@@ -67,25 +95,125 @@
       text-align: left;
     }
     #log div { padding: 2px 0; border-bottom: 1px solid var(--border); }
+
+    .browse-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #up-btn {
+      display: none;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #breadcrumb {
+      font-size: 13px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+    #file-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0 0;
+      background: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    #file-list li {
+      border-bottom: 1px solid var(--border);
+    }
+    #file-list li:last-child { border-bottom: none; }
+    #file-list button.entry-btn {
+      display: block;
+      width: 100%;
+      border: none;
+      background: none;
+      text-align: left;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--text);
+      cursor: pointer;
+    }
+    #file-list a.entry-link {
+      display: block;
+      padding: 14px 16px;
+      font-size: 15px;
+      color: var(--text);
+      text-decoration: none;
+    }
+    #file-list .size {
+      color: var(--muted);
+      font-size: 12px;
+      display: block;
+      margin-top: 2px;
+    }
+    #browse-status { text-align: center; }
+    .download-note { text-align: center; margin-top: 14px; }
   </style>
 </head>
 <body>
   <h1>PocketDump</h1>
-  <p>Pick photos &amp; videos to send to your PC.</p>
   <p id="sync-info" style="display:none"></p>
 
-  <label for="file-input">Choose photos &amp; videos</label>
-  <input id="file-input" type="file" accept="image/*,video/*" multiple />
+  <div class="tabs">
+    <button id="tab-send" class="tab-btn active" type="button">Send to PC</button>
+    <button id="tab-get" class="tab-btn" type="button">Get from PC</button>
+  </div>
 
-  <div id="progress-card">
-    <div id="overall"></div>
-    <div id="current-file"></div>
-    <div id="bar-track"><div id="bar-fill"></div></div>
-    <div id="summary"></div>
-    <div id="log"></div>
+  <div id="send-panel" class="panel active" style="text-align:center">
+    <p>Pick photos &amp; videos to send to your PC.</p>
+    <label class="picker" for="file-input">Choose photos &amp; videos</label>
+    <input id="file-input" type="file" accept="image/*,video/*" multiple />
+
+    <div id="progress-card">
+      <div id="overall"></div>
+      <div id="current-file"></div>
+      <div id="bar-track"><div id="bar-fill"></div></div>
+      <div id="summary"></div>
+      <div id="log"></div>
+    </div>
+  </div>
+
+  <div id="get-panel" class="panel">
+    <p style="text-align:center">Browse the folder your PC is sharing and download files to your iPhone.</p>
+    <div class="browse-toolbar">
+      <button id="up-btn" type="button">⬆️ Up</button>
+      <span id="breadcrumb"></span>
+    </div>
+    <p id="browse-status" class="muted"></p>
+    <ul id="file-list"></ul>
+    <p class="download-note">Downloads land in Files → Downloads. From there, use Share → Save Video/Image for photos &amp; videos, or Share → Music to add a song to your Music library.</p>
   </div>
 
   <script>
+    // --- Tabs ---
+    const tabSend = document.getElementById('tab-send');
+    const tabGet = document.getElementById('tab-get');
+    const sendPanel = document.getElementById('send-panel');
+    const getPanel = document.getElementById('get-panel');
+    let browseLoaded = false;
+
+    function activateTab(name) {
+      const sending = name === 'send';
+      tabSend.classList.toggle('active', sending);
+      tabGet.classList.toggle('active', !sending);
+      sendPanel.classList.toggle('active', sending);
+      getPanel.classList.toggle('active', !sending);
+      if (!sending && !browseLoaded) {
+        browseLoaded = true;
+        loadBrowse('');
+      }
+    }
+    tabSend.addEventListener('click', () => activateTab('send'));
+    tabGet.addEventListener('click', () => activateTab('get'));
+
+    // --- Send to PC (upload) ---
     const input = document.getElementById('file-input');
     const card = document.getElementById('progress-card');
     const overallEl = document.getElementById('overall');
@@ -223,6 +351,68 @@
 
       input.value = '';
     }
+
+    // --- Get from PC (browse & download) ---
+    const upBtn = document.getElementById('up-btn');
+    const breadcrumbEl = document.getElementById('breadcrumb');
+    const browseStatusEl = document.getElementById('browse-status');
+    const fileListEl = document.getElementById('file-list');
+    let currentDir = '';
+
+    async function loadBrowse(dir) {
+      browseStatusEl.textContent = 'Loading…';
+      fileListEl.innerHTML = '';
+      try {
+        const res = await fetch(`/browse?dir=${encodeURIComponent(dir)}`);
+        const data = await res.json();
+        if (data.error) {
+          browseStatusEl.textContent = data.error;
+          upBtn.style.display = 'none';
+          breadcrumbEl.textContent = '';
+          return;
+        }
+
+        currentDir = data.dir || '';
+        breadcrumbEl.textContent = currentDir ? `/${currentDir}` : '/ (shared folder)';
+        upBtn.style.display = currentDir ? 'inline-block' : 'none';
+
+        if (data.entries.length === 0) {
+          browseStatusEl.textContent = 'This folder is empty.';
+        } else {
+          browseStatusEl.textContent = '';
+        }
+
+        data.entries.forEach((entry) => {
+          const li = document.createElement('li');
+          if (entry.type === 'dir') {
+            const btn = document.createElement('button');
+            btn.className = 'entry-btn';
+            btn.type = 'button';
+            btn.textContent = `📁 ${entry.name}`;
+            btn.addEventListener('click', () => loadBrowse(entry.path));
+            li.appendChild(btn);
+          } else {
+            const link = document.createElement('a');
+            link.className = 'entry-link';
+            link.href = `/file?path=${encodeURIComponent(entry.path)}`;
+            link.textContent = `⬇️ ${entry.name}`;
+            const size = document.createElement('span');
+            size.className = 'size';
+            size.textContent = formatSize(entry.size);
+            link.appendChild(size);
+            li.appendChild(link);
+          }
+          fileListEl.appendChild(li);
+        });
+      } catch {
+        browseStatusEl.textContent = 'Could not reach the PC — check WiFi connection.';
+      }
+    }
+
+    upBtn.addEventListener('click', () => {
+      const parent = currentDir.split('/').slice(0, -1).join('/');
+      loadBrowse(parent);
+    });
   </script>
 </body>
 </html>
