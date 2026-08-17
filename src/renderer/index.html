@@ -9,13 +9,14 @@
   <header class="top-bar">
     <div>
       <h1>PocketDump</h1>
-      <p class="subtitle">Send photos &amp; videos from your iPhone over WiFi</p>
+      <p class="subtitle">Move photos, videos &amp; files between your PC and iPhone</p>
     </div>
     <button id="theme-toggle" class="theme-toggle" type="button" aria-label="Toggle dark mode"></button>
   </header>
 
   <section class="card">
     <h2>1. Choose a destination folder</h2>
+    <p class="muted">Files your iPhone sends land here, sorted into dated folders.</p>
     <button id="choose-folder">Choose folder…</button>
     <p id="folder-path" class="muted">No folder selected yet</p>
     <button id="open-folder" class="link" style="display:none">Open folder</button>
@@ -26,16 +27,25 @@
   </section>
 
   <section class="card">
-    <h2>2. Scan with your iPhone</h2>
+    <h2>2. Choose a folder to share (optional)</h2>
+    <p class="muted">Your iPhone can browse and download files from this folder.</p>
+    <button id="choose-source-folder">Choose folder…</button>
+    <p id="source-folder-path" class="muted">No folder shared yet</p>
+    <button id="open-source-folder" class="link" style="display:none">Open folder</button>
+  </section>
+
+  <section class="card">
+    <h2>3. Scan with your iPhone</h2>
     <p class="muted">Open the Camera app on your iPhone and scan this code, or open the link in Safari (same WiFi network required).</p>
     <img id="qr" alt="QR code" />
     <p id="server-url" class="muted"></p>
     <label for="network-select" class="muted">If the QR code doesn't connect, pick a different network:</label>
     <select id="network-select"></select>
+    <p class="muted hint">Tip: for a wired connection, turn on Personal Hotspot and plug in the USB cable — the iPhone's USB network will show up in this list (needs Apple Mobile Device Support / iTunes drivers on Windows).</p>
   </section>
 
   <section class="card">
-    <h2>3. Transfer status</h2>
+    <h2>4. Transfer status</h2>
     <p class="status-line">
       <span id="status-dot" class="status-dot"></span>
       <span id="status-text">Idle — waiting for your iPhone</span>

@@ -104,6 +104,9 @@ label[for="network-select"] {
   display: block;
   margin-top: 12px;
 }
+.hint {
+  margin-top: 12px;
+}
 #network-select {
   margin-top: 4px;
   padding: 6px 8px;

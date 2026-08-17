@@ -1,6 +1,9 @@
 const chooseFolderBtn = document.getElementById('choose-folder');
 const openFolderBtn = document.getElementById('open-folder');
 const folderPathEl = document.getElementById('folder-path');
+const chooseSourceFolderBtn = document.getElementById('choose-source-folder');
+const openSourceFolderBtn = document.getElementById('open-source-folder');
+const sourceFolderPathEl = document.getElementById('source-folder-path');
 const qrEl = document.getElementById('qr');
 const serverUrlEl = document.getElementById('server-url');
 const networkSelectEl = document.getElementById('network-select');
@@ -36,6 +39,29 @@ openFolderBtn.addEventListener('click', () => {
 
 window.pocketdump.onFolderInfo(({ folder }) => {
   showFolder(folder);
+});
+
+function showSourceFolder(folder) {
+  if (folder) {
+    sourceFolderPathEl.textContent = folder;
+    openSourceFolderBtn.style.display = 'inline';
+  } else {
+    sourceFolderPathEl.textContent = 'No folder shared yet';
+    openSourceFolderBtn.style.display = 'none';
+  }
+}
+
+chooseSourceFolderBtn.addEventListener('click', async () => {
+  const folder = await window.pocketdump.chooseSourceFolder();
+  showSourceFolder(folder);
+});
+
+openSourceFolderBtn.addEventListener('click', () => {
+  window.pocketdump.openSourceFolder();
+});
+
+window.pocketdump.onSourceFolderInfo(({ folder }) => {
+  showSourceFolder(folder);
 });
 
 rebuildBtn.addEventListener('click', async () => {

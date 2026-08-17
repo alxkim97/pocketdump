@@ -50,12 +50,22 @@ function uniqueFilePath(dir, fileName) {
   return path.join(dir, candidate);
 }
 
-function startServer({ port, getDestinationFolder, onUpload }) {
+// Resolves a client-supplied relative path against `base` and refuses
+// anything that escapes it (e.g. "../../Windows/System32") before it's
+// ever passed to fs. Returns null for anything unsafe.
+function resolveSafePath(base, relPath) {
+  const target = path.resolve(base, relPath || '.');
+  const rel = path.relative(base, target);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return null;
+  return target;
+}
+
+function startServer({ port, getDestinationFolder, getSourceFolder, onUpload }) {
   const app = express();
   const upload = multer({ storage: multer.memoryStorage() });
 
   app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'mobile', 'upload.html'));
+    res.sendFile(path.join(__dirname, 'mobile', 'index.html'));
   });
 
   app.post('/upload', upload.single('file'), (req, res) => {
@@ -123,6 +133,68 @@ function startServer({ port, getDestinationFolder, onUpload }) {
     }
 
     res.json({ lastSyncAt: meta.lastSyncAt || null, count, signatures });
+  });
+
+  // Lets the phone list the contents of the folder the PC is sharing, one
+  // level at a time, so it can be browsed like a file picker.
+  app.get('/browse', (req, res) => {
+    const sourceFolder = getSourceFolder();
+    if (!sourceFolder) {
+      return res.status(400).json({ error: 'No folder shared from PC yet.' });
+    }
+
+    const target = resolveSafePath(sourceFolder, req.query.dir);
+    if (!target) return res.status(400).json({ error: 'Invalid path.' });
+
+    let stat;
+    try {
+      stat = fs.statSync(target);
+    } catch {
+      return res.status(404).json({ error: 'Folder not found.' });
+    }
+    if (!stat.isDirectory()) return res.status(400).json({ error: 'Not a folder.' });
+
+    const entries = fs
+      .readdirSync(target, { withFileTypes: true })
+      .filter((entry) => entry.name !== MANIFEST_NAME && !entry.name.startsWith('.'))
+      .map((entry) => {
+        const entryPath = path.join(target, entry.name);
+        const relPath = path.relative(sourceFolder, entryPath).split(path.sep).join('/');
+        if (entry.isDirectory()) {
+          return { name: entry.name, type: 'dir', path: relPath };
+        }
+        const entryStat = fs.statSync(entryPath);
+        return { name: entry.name, type: 'file', path: relPath, size: entryStat.size };
+      })
+      .sort((a, b) => {
+        if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+        return a.name.localeCompare(b.name);
+      });
+
+    const relDir = path.relative(sourceFolder, target).split(path.sep).join('/');
+    res.json({ dir: relDir, entries });
+  });
+
+  // Streams a single file from the shared folder down to the phone as an
+  // attachment, so Safari saves it instead of trying to open it inline.
+  app.get('/file', (req, res) => {
+    const sourceFolder = getSourceFolder();
+    if (!sourceFolder) {
+      return res.status(400).json({ error: 'No folder shared from PC yet.' });
+    }
+
+    const target = resolveSafePath(sourceFolder, req.query.path);
+    if (!target) return res.status(400).json({ error: 'Invalid path.' });
+
+    let stat;
+    try {
+      stat = fs.statSync(target);
+    } catch {
+      return res.status(404).json({ error: 'File not found.' });
+    }
+    if (!stat.isFile()) return res.status(400).json({ error: 'Not a file.' });
+
+    res.download(target);
   });
 
   // Catches uploads interrupted mid-transfer (e.g. the phone's screen locks
