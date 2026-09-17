@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const QRCode = require('qrcode');
+const { autoUpdater } = require('electron-updater');
 const { startServer, stopServer, rebuildIndex } = require('./server');
 
 const PORT = 8989;
@@ -23,6 +24,59 @@ function loadSettings() {
 
 function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings), 'utf8');
+}
+
+// Auto-update via electron-updater + GitHub Releases. A manual check from
+// the renderer always reports back (found/not found/error); the periodic
+// background check stays silent unless it actually finds something, so it
+// doesn't nag.
+autoUpdater.autoInstallOnAppQuit = true;
+
+autoUpdater.on('update-downloaded', (info) => {
+  dialog.showMessageBox({
+    type: 'info',
+    title: 'PocketDump update ready',
+    message: `PocketDump ${info.version} has been downloaded.`,
+    detail: 'Restart now to install it, or it will install automatically the next time PocketDump quits.',
+    buttons: ['Restart Now', 'Later'],
+    defaultId: 0,
+    cancelId: 1
+  }).then(({ response }) => {
+    if (response === 0) autoUpdater.quitAndInstall();
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  console.error('autoUpdater error:', err);
+});
+
+function checkForUpdates(manual) {
+  if (!manual) {
+    autoUpdater.checkForUpdates().catch(() => {});
+    return;
+  }
+  const cleanup = () => {
+    autoUpdater.off('update-not-available', onNotAvailable);
+    autoUpdater.off('update-available', cleanup);
+    autoUpdater.off('error', onError);
+  };
+  const onNotAvailable = () => {
+    cleanup();
+    dialog.showMessageBox({ type: 'info', title: 'PocketDump', message: "You're up to date." });
+  };
+  const onError = (err) => {
+    cleanup();
+    dialog.showMessageBox({
+      type: 'error',
+      title: 'Update check failed',
+      message: 'Could not check for updates.',
+      detail: String((err && err.message) || err)
+    });
+  };
+  autoUpdater.once('update-not-available', onNotAvailable);
+  autoUpdater.once('update-available', cleanup);
+  autoUpdater.once('error', onError);
+  autoUpdater.checkForUpdates().catch(() => {});
 }
 
 function notifyFolder() {
@@ -168,6 +222,10 @@ ipcMain.handle('get-app-info', () => ({
   credit: 'Alex Kim'
 }));
 
+ipcMain.handle('check-for-updates', () => {
+  checkForUpdates(true);
+});
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
@@ -175,6 +233,12 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });
+
+  // Delay the first check past startup so it doesn't compete with the
+  // window's initial load, then recheck periodically since the app may
+  // stay open for a while without being relaunched.
+  setTimeout(() => checkForUpdates(false), 10_000);
+  setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
 });
 
 app.on('window-all-closed', () => {

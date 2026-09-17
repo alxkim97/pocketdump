@@ -154,3 +154,12 @@ label[for="network-select"] {
   text-align: center;
   margin-top: 8px;
 }
+.link-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: inherit;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 0;
+}

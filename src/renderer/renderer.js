@@ -11,9 +11,10 @@ const statusDotEl = document.getElementById('status-dot');
 const statusTextEl = document.getElementById('status-text');
 const uploadLogEl = document.getElementById('upload-log');
 const themeToggleBtn = document.getElementById('theme-toggle');
-const footerEl = document.getElementById('app-footer');
 const rebuildBtn = document.getElementById('rebuild-index');
 const rebuildStatusEl = document.getElementById('rebuild-status');
+const footerTextEl = document.getElementById('app-footer-text');
+const checkUpdatesBtn = document.getElementById('check-updates-btn');
 
 function showFolder(folder) {
   if (folder) {
@@ -130,5 +131,9 @@ themeToggleBtn.addEventListener('click', () => {
 });
 
 window.pocketdump.getAppInfo().then(({ version, credit }) => {
-  footerEl.textContent = `PocketDump v${version} · Built by ${credit}`;
+  footerTextEl.textContent = `PocketDump v${version} · Built by ${credit}`;
+});
+
+checkUpdatesBtn.addEventListener('click', () => {
+  window.pocketdump.checkForUpdates();
 });
