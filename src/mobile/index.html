@@ -155,6 +155,60 @@
     }
     #browse-status { text-align: center; }
     .download-note { text-align: center; margin-top: 14px; }
+
+    .camera-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .secondary-btn {
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    #camera-upload-btn {
+      flex: 1;
+      border: none;
+    }
+    #camera-queue {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 16px;
+    }
+    .queue-thumb {
+      position: relative;
+      aspect-ratio: 1 / 1;
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--card-bg);
+    }
+    .queue-thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    .queue-thumb .remove-btn {
+      position: absolute;
+      top: 4px;
+      right: 4px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      border: none;
+      background: rgba(0, 0, 0, 0.6);
+      color: #fff;
+      font-size: 13px;
+      line-height: 22px;
+      text-align: center;
+      padding: 0;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -163,6 +217,7 @@
 
   <div class="tabs">
     <button id="tab-send" class="tab-btn active" type="button">Send to PC</button>
+    <button id="tab-camera" class="tab-btn" type="button">Camera</button>
     <button id="tab-get" class="tab-btn" type="button">Get from PC</button>
   </div>
 
@@ -170,14 +225,28 @@
     <p>Pick photos &amp; videos to send to your PC.</p>
     <label class="picker" for="file-input">Choose photos &amp; videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
+  </div>
 
-    <div id="progress-card">
-      <div id="overall"></div>
-      <div id="current-file"></div>
-      <div id="bar-track"><div id="bar-fill"></div></div>
-      <div id="summary"></div>
-      <div id="log"></div>
+  <div id="camera-panel" class="panel" style="text-align:center">
+    <p>Take photos with your camera and queue them up, then send the batch to your PC.</p>
+    <label class="picker" for="camera-input">📷 Take Photo</label>
+    <input id="camera-input" type="file" accept="image/*" capture="environment" />
+
+    <div id="camera-queue-wrap" style="display:none">
+      <div id="camera-queue"></div>
+      <div class="camera-actions">
+        <button id="camera-upload-btn" class="picker" type="button">Upload All (<span id="camera-count">0</span>)</button>
+        <button id="camera-clear-btn" class="secondary-btn" type="button">Clear</button>
+      </div>
     </div>
+  </div>
+
+  <div id="progress-card">
+    <div id="overall"></div>
+    <div id="current-file"></div>
+    <div id="bar-track"><div id="bar-fill"></div></div>
+    <div id="summary"></div>
+    <div id="log"></div>
   </div>
 
   <div id="get-panel" class="panel">
@@ -194,23 +263,27 @@
   <script>
     // --- Tabs ---
     const tabSend = document.getElementById('tab-send');
+    const tabCamera = document.getElementById('tab-camera');
     const tabGet = document.getElementById('tab-get');
     const sendPanel = document.getElementById('send-panel');
+    const cameraPanel = document.getElementById('camera-panel');
     const getPanel = document.getElementById('get-panel');
     let browseLoaded = false;
 
     function activateTab(name) {
-      const sending = name === 'send';
-      tabSend.classList.toggle('active', sending);
-      tabGet.classList.toggle('active', !sending);
-      sendPanel.classList.toggle('active', sending);
-      getPanel.classList.toggle('active', !sending);
-      if (!sending && !browseLoaded) {
+      tabSend.classList.toggle('active', name === 'send');
+      tabCamera.classList.toggle('active', name === 'camera');
+      tabGet.classList.toggle('active', name === 'get');
+      sendPanel.classList.toggle('active', name === 'send');
+      cameraPanel.classList.toggle('active', name === 'camera');
+      getPanel.classList.toggle('active', name === 'get');
+      if (name === 'get' && !browseLoaded) {
         browseLoaded = true;
         loadBrowse('');
       }
     }
     tabSend.addEventListener('click', () => activateTab('send'));
+    tabCamera.addEventListener('click', () => activateTab('camera'));
     tabGet.addEventListener('click', () => activateTab('get'));
 
     // --- Send to PC (upload) ---
@@ -258,7 +331,9 @@
     input.addEventListener('change', () => {
       const files = Array.from(input.files);
       if (files.length === 0) return;
-      uploadSequentially(files);
+      uploadSequentially(files).then(() => {
+        input.value = '';
+      });
     });
 
     function formatSize(bytes) {
@@ -348,9 +423,72 @@
       if (duplicates) parts.push(`${duplicates} already on PC`);
       if (failed) parts.push(`${failed} failed`);
       summaryEl.textContent = `Done — ${parts.join(', ')}.`;
-
-      input.value = '';
     }
+
+    // --- Camera (capture & batch upload) ---
+    const cameraInput = document.getElementById('camera-input');
+    const cameraQueueWrap = document.getElementById('camera-queue-wrap');
+    const cameraQueueEl = document.getElementById('camera-queue');
+    const cameraCountEl = document.getElementById('camera-count');
+    const cameraUploadBtn = document.getElementById('camera-upload-btn');
+    const cameraClearBtn = document.getElementById('camera-clear-btn');
+
+    // Each entry is { file, url } — url is an object URL kept around only
+    // for the thumbnail preview and revoked once the entry leaves the queue.
+    let cameraQueue = [];
+
+    function renderCameraQueue() {
+      cameraQueueEl.innerHTML = '';
+      cameraQueue.forEach((entry, index) => {
+        const thumb = document.createElement('div');
+        thumb.className = 'queue-thumb';
+
+        const img = document.createElement('img');
+        img.src = entry.url;
+        thumb.appendChild(img);
+
+        const removeBtn = document.createElement('button');
+        removeBtn.className = 'remove-btn';
+        removeBtn.type = 'button';
+        removeBtn.textContent = '✕';
+        removeBtn.addEventListener('click', () => {
+          URL.revokeObjectURL(entry.url);
+          cameraQueue.splice(index, 1);
+          renderCameraQueue();
+        });
+        thumb.appendChild(removeBtn);
+
+        cameraQueueEl.appendChild(thumb);
+      });
+
+      cameraQueueWrap.style.display = cameraQueue.length ? 'block' : 'none';
+      cameraCountEl.textContent = String(cameraQueue.length);
+    }
+
+    cameraInput.addEventListener('change', () => {
+      const files = Array.from(cameraInput.files);
+      files.forEach((file) => {
+        cameraQueue.push({ file, url: URL.createObjectURL(file) });
+      });
+      renderCameraQueue();
+      cameraInput.value = '';
+    });
+
+    cameraUploadBtn.addEventListener('click', () => {
+      if (cameraQueue.length === 0) return;
+      const files = cameraQueue.map((entry) => entry.file);
+      uploadSequentially(files).then(() => {
+        cameraQueue.forEach((entry) => URL.revokeObjectURL(entry.url));
+        cameraQueue = [];
+        renderCameraQueue();
+      });
+    });
+
+    cameraClearBtn.addEventListener('click', () => {
+      cameraQueue.forEach((entry) => URL.revokeObjectURL(entry.url));
+      cameraQueue = [];
+      renderCameraQueue();
+    });
 
     // --- Get from PC (browse & download) ---
     const upBtn = document.getElementById('up-btn');
