@@ -161,6 +161,15 @@
       gap: 8px;
       margin-top: 16px;
     }
+    #review-hint {
+      background: rgba(10, 132, 255, 0.12);
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 13px;
+      margin: 0 0 12px;
+    }
     .secondary-btn {
       border: 1px solid var(--border);
       background: var(--card-bg);
@@ -193,26 +202,186 @@
       object-fit: cover;
       display: block;
     }
-    .queue-thumb .remove-btn {
+    .queue-thumb .remove-btn, .queue-thumb .edit-btn {
       position: absolute;
       top: 4px;
-      right: 4px;
       width: 22px;
       height: 22px;
       border-radius: 50%;
       border: none;
       background: rgba(0, 0, 0, 0.6);
       color: #fff;
-      font-size: 13px;
+      font-size: 12px;
       line-height: 22px;
       text-align: center;
       padding: 0;
       cursor: pointer;
     }
+    .queue-thumb .remove-btn { right: 4px; }
+    .queue-thumb .edit-btn { left: 4px; }
+
+    .scan-mode-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--text);
+    }
+
+    .setup-card {
+      margin-top: 20px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 14px 16px;
+      text-align: left;
+      font-size: 13px;
+    }
+    .setup-card summary {
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .setup-card ol {
+      padding-left: 20px;
+      margin: 10px 0 0;
+    }
+    .setup-card li {
+      margin-bottom: 10px;
+    }
+    .setup-card a.step-link {
+      display: inline-block;
+      margin-top: 4px;
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    #live-video-wrap {
+      position: relative;
+      width: 100%;
+      /* Capped (not height:auto) so the shutter button always fits on
+         screen without scrolling, regardless of the camera's native aspect
+         ratio. dvh/svh account for mobile browser chrome collapsing on
+         scroll; vh is a fallback for browsers without them. */
+      height: 56vh;
+      height: 56svh;
+      max-height: 460px;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #000;
+    }
+    #live-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      background: #000;
+      display: block;
+    }
+    #live-controls {
+      padding: 16px 0 calc(env(safe-area-inset-bottom, 0px));
+      text-align: center;
+    }
+    #shutter-btn {
+      display: block;
+      margin: 0 auto;
+      width: 68px;
+      height: 68px;
+      border-radius: 50%;
+      border: 4px solid var(--accent);
+      background: #fff;
+      cursor: pointer;
+    }
+    #camera-error {
+      display: none;
+      margin-top: 16px;
+      font-size: 14px;
+      color: #d93025;
+    }
+
+    #scan-editor {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: #000;
+      z-index: 100;
+      text-align: center;
+      overflow-y: auto;
+    }
+    #scan-progress {
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      padding: 12px 16px 0;
+      margin: 0;
+    }
+    #scan-stage {
+      position: relative;
+      max-width: 100%;
+      margin: 0 auto;
+      touch-action: none;
+    }
+    #scan-stage img {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+    #scan-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+    #scan-overlay polygon {
+      fill: rgba(10, 132, 255, 0.12);
+      stroke: #0a84ff;
+      stroke-width: 1.5;
+      vector-effect: non-scaling-stroke;
+    }
+    .corner-handle {
+      position: absolute;
+      width: 28px;
+      height: 28px;
+      margin-left: -14px;
+      margin-top: -14px;
+      border-radius: 50%;
+      background: rgba(10, 132, 255, 0.9);
+      border: 2px solid #fff;
+      touch-action: none;
+    }
+    .scan-editor-controls {
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .scan-editor-row {
+      display: flex;
+      gap: 10px;
+    }
+    .scan-editor-row button {
+      flex: 1;
+      padding: 14px;
+      border-radius: 10px;
+      font-size: 15px;
+      cursor: pointer;
+      border: none;
+    }
+    #scan-grayscale-btn.active { outline: 3px solid var(--accent); }
+    #scan-use-btn { background: var(--accent); color: #fff; }
+    #scan-retake-btn, #scan-grayscale-btn { background: #3a3a3d; color: #fff; }
+    #scan-processing {
+      display: none;
+      color: #fff;
+      padding: 16px;
+      font-size: 14px;
+    }
   </style>
 </head>
 <body>
   <h1>PocketDump</h1>
+  <p id="app-version"></p>
   <p id="sync-info" style="display:none"></p>
 
   <div class="tabs">
@@ -228,15 +397,72 @@
   </div>
 
   <div id="camera-panel" class="panel" style="text-align:center">
-    <p>Take photos with your camera and queue them up, then send the batch to your PC.</p>
-    <label class="picker" for="camera-input">📷 Take Photo</label>
-    <input id="camera-input" type="file" accept="image/*" capture="environment" />
+    <p>Take photos and queue them up, then send the batch to your PC.</p>
+
+    <div class="scan-mode-row">
+      <label><input type="checkbox" id="scan-mode-toggle" /> Scan mode (align &amp; B/W filter each photo)</label>
+    </div>
+
+    <!-- Native-camera path: shown over plain HTTP, one tap opens the iPhone's Camera app per photo. -->
+    <div id="native-capture">
+      <label class="picker" for="camera-input">📷 Take Photo</label>
+      <input id="camera-input" type="file" accept="image/*" capture="environment" />
+
+      <details class="setup-card">
+        <summary>🔒 Enable Live Camera (optional, one-time setup)</summary>
+        <ol>
+          <li>
+            Install the certificate.
+            <br /><a class="step-link" id="cert-link" href="/cert">Step 1: Install Certificate</a>
+          </li>
+          <li>On your iPhone: Settings → General → VPN &amp; Device Management → tap the downloaded profile → Install. Then Settings → General → About → Certificate Trust Settings → turn on full trust for "PocketDump".</li>
+          <li>
+            Open the live camera.
+            <br /><a class="step-link" id="live-camera-link" href="#">Step 3: Open Live Camera</a>
+          </li>
+        </ol>
+      </details>
+    </div>
+
+    <!-- Live-camera path: shown once the phone is on the HTTPS origin. Fixed
+         full-screen so the shutter is always reachable without scrolling. -->
+    <div id="live-capture" style="display:none">
+      <div id="live-video-wrap">
+        <video id="live-video" autoplay playsinline muted></video>
+      </div>
+      <div id="live-controls">
+        <button id="shutter-btn" type="button" aria-label="Take photo"></button>
+        <p id="camera-error"></p>
+        <p><a class="step-link" id="native-camera-link" href="#">Switch back to native camera</a></p>
+      </div>
+    </div>
 
     <div id="camera-queue-wrap" style="display:none">
+      <p id="review-hint" style="display:none">Review your photos below — remove any with ✕, or tap ✎ to realign one — then tap Upload All again to send.</p>
       <div id="camera-queue"></div>
       <div class="camera-actions">
         <button id="camera-upload-btn" class="picker" type="button">Upload All (<span id="camera-count">0</span>)</button>
         <button id="camera-clear-btn" class="secondary-btn" type="button">Clear</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="scan-editor">
+    <p id="scan-progress"></p>
+    <div id="scan-stage">
+      <img id="scan-image" alt="" />
+      <svg id="scan-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon id="scan-polygon" points=""></polygon></svg>
+      <div class="corner-handle" data-corner="tl"></div>
+      <div class="corner-handle" data-corner="tr"></div>
+      <div class="corner-handle" data-corner="br"></div>
+      <div class="corner-handle" data-corner="bl"></div>
+    </div>
+    <div id="scan-processing">Processing…</div>
+    <div class="scan-editor-controls">
+      <button id="scan-grayscale-btn" type="button">B/W filter: off</button>
+      <div class="scan-editor-row">
+        <button id="scan-retake-btn" type="button">Skip</button>
+        <button id="scan-use-btn" type="button">Use Photo</button>
       </div>
     </div>
   </div>
@@ -261,6 +487,8 @@
   </div>
 
   <script>
+    const appVersionEl = document.getElementById('app-version');
+
     // --- Tabs ---
     const tabSend = document.getElementById('tab-send');
     const tabCamera = document.getElementById('tab-camera');
@@ -280,6 +508,13 @@
       if (name === 'get' && !browseLoaded) {
         browseLoaded = true;
         loadBrowse('');
+      }
+      // Only start the live camera stream while its tab is actually visible,
+      // and release it the moment you leave — otherwise the camera stays on
+      // (and the tab icon lit) in the background indefinitely.
+      if (location.protocol === 'https:') {
+        if (name === 'camera') startLiveCamera();
+        else stopLiveCamera();
       }
     }
     tabSend.addEventListener('click', () => activateTab('send'));
@@ -428,14 +663,63 @@
     // --- Camera (capture & batch upload) ---
     const cameraInput = document.getElementById('camera-input');
     const cameraQueueWrap = document.getElementById('camera-queue-wrap');
+    const reviewHintEl = document.getElementById('review-hint');
     const cameraQueueEl = document.getElementById('camera-queue');
     const cameraCountEl = document.getElementById('camera-count');
     const cameraUploadBtn = document.getElementById('camera-upload-btn');
     const cameraClearBtn = document.getElementById('camera-clear-btn');
+    const scanModeToggle = document.getElementById('scan-mode-toggle');
+    const nativeCaptureEl = document.getElementById('native-capture');
+    const liveCaptureEl = document.getElementById('live-capture');
+    const liveVideoEl = document.getElementById('live-video');
+    const shutterBtn = document.getElementById('shutter-btn');
+    const cameraErrorEl = document.getElementById('camera-error');
+    const liveCameraLink = document.getElementById('live-camera-link');
+    const nativeCameraLink = document.getElementById('native-camera-link');
 
-    // Each entry is { file, url } — url is an object URL kept around only
-    // for the thumbnail preview and revoked once the entry leaves the queue.
+    scanModeToggle.checked = localStorage.getItem('pocketdump-scan-mode') === '1';
+    scanModeToggle.addEventListener('change', () => {
+      localStorage.setItem('pocketdump-scan-mode', scanModeToggle.checked ? '1' : '0');
+    });
+
+    // Each entry is { file, url, aligned } — url is an object URL kept
+    // around only for the thumbnail preview and revoked once the entry
+    // leaves the queue. aligned tracks whether this photo has already been
+    // through the align/filter editor (skipped counts too), so a later
+    // batch-align pass only touches photos added since the last one.
     let cameraQueue = [];
+
+    function addToQueue(file) {
+      cameraQueue.push({ file, url: URL.createObjectURL(file), aligned: false });
+      renderCameraQueue();
+    }
+
+    // Every capture goes straight into the queue, whether or not scan mode
+    // is on — alignment happens as one batch pass right before upload (see
+    // cameraUploadBtn below), not interrupting you after each photo.
+    function intakePhoto(file) {
+      addToQueue(file);
+    }
+
+    // Walks every not-yet-aligned queued photo through the align/filter
+    // editor in order, one at a time, replacing each entry with the
+    // processed result unless it's skipped. Called once, right before
+    // upload, when scan mode is on.
+    async function alignAllQueued() {
+      const pending = cameraQueue.map((entry, index) => ({ entry, index })).filter((p) => !p.entry.aligned);
+      const total = pending.length;
+      for (let i = 0; i < pending.length; i += 1) {
+        const { entry, index } = pending[i];
+        const processed = await openScanEditor(entry.file, { current: i + 1, total });
+        if (processed) {
+          URL.revokeObjectURL(entry.url);
+          cameraQueue[index] = { file: processed, url: URL.createObjectURL(processed), aligned: true };
+        } else {
+          cameraQueue[index].aligned = true;
+        }
+      }
+      renderCameraQueue();
+    }
 
     function renderCameraQueue() {
       cameraQueueEl.innerHTML = '';
@@ -446,6 +730,22 @@
         const img = document.createElement('img');
         img.src = entry.url;
         thumb.appendChild(img);
+
+        const editBtn = document.createElement('button');
+        editBtn.className = 'edit-btn';
+        editBtn.type = 'button';
+        editBtn.textContent = '✎';
+        editBtn.addEventListener('click', async () => {
+          const processed = await openScanEditor(entry.file);
+          if (processed) {
+            URL.revokeObjectURL(entry.url);
+            cameraQueue[index] = { file: processed, url: URL.createObjectURL(processed), aligned: true };
+          } else {
+            cameraQueue[index].aligned = true;
+          }
+          renderCameraQueue();
+        });
+        thumb.appendChild(editBtn);
 
         const removeBtn = document.createElement('button');
         removeBtn.className = 'remove-btn';
@@ -467,19 +767,32 @@
 
     cameraInput.addEventListener('change', () => {
       const files = Array.from(cameraInput.files);
-      files.forEach((file) => {
-        cameraQueue.push({ file, url: URL.createObjectURL(file) });
-      });
-      renderCameraQueue();
+      files.forEach((file) => intakePhoto(file));
       cameraInput.value = '';
     });
 
-    cameraUploadBtn.addEventListener('click', () => {
+    cameraUploadBtn.addEventListener('click', async () => {
       if (cameraQueue.length === 0) return;
+
+      // Scan mode's align/filter pass happens here, as one batch step through
+      // every not-yet-aligned queued photo, right before the actual upload —
+      // not after each individual capture. Once done, stop and let the
+      // queue grid below serve as a review: the user can look over the
+      // results and delete any before tapping Upload All again to send.
+      const needsAlign = scanModeToggle.checked && cameraQueue.some((entry) => !entry.aligned);
+      if (needsAlign) {
+        await alignAllQueued();
+        reviewHintEl.style.display = 'block';
+        cameraQueueWrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+
+      reviewHintEl.style.display = 'none';
       const files = cameraQueue.map((entry) => entry.file);
       uploadSequentially(files).then(() => {
         cameraQueue.forEach((entry) => URL.revokeObjectURL(entry.url));
         cameraQueue = [];
+        reviewHintEl.style.display = 'none';
         renderCameraQueue();
       });
     });
@@ -487,8 +800,389 @@
     cameraClearBtn.addEventListener('click', () => {
       cameraQueue.forEach((entry) => URL.revokeObjectURL(entry.url));
       cameraQueue = [];
+      reviewHintEl.style.display = 'none';
       renderCameraQueue();
     });
+
+    // --- Live camera view (HTTPS-only — getUserMedia needs a secure context) ---
+    const isHttps = location.protocol === 'https:';
+    let liveStream = null;
+
+    fetch('/config').then((res) => res.json()).then(({ httpsPort, port, version }) => {
+      if (httpsPort) {
+        liveCameraLink.href = `https://${location.hostname}:${httpsPort}/`;
+      } else {
+        liveCameraLink.textContent = 'Live camera unavailable (HTTPS not set up on the PC)';
+      }
+      if (port) nativeCameraLink.href = `http://${location.hostname}:${port}/`;
+      if (version) appVersionEl.textContent = `v${version}`;
+    }).catch(() => {});
+
+    if (isHttps) {
+      nativeCaptureEl.style.display = 'none';
+      liveCaptureEl.style.display = 'block';
+    }
+
+    async function startLiveCamera() {
+      cameraErrorEl.style.display = 'none';
+      const constraints = {
+        video: {
+          facingMode: 'environment',
+          width: { ideal: 1920 },
+          height: { ideal: 1080 },
+          // Best-effort — unsupported on iOS Safari as of writing, but
+          // harmless to ask for and free if a future version picks it up.
+          advanced: [{ focusMode: 'continuous' }]
+        },
+        audio: false
+      };
+      try {
+        liveStream = await navigator.mediaDevices.getUserMedia(constraints);
+        liveVideoEl.srcObject = liveStream;
+      } catch (err) {
+        cameraErrorEl.textContent = `Couldn't start the camera (${err.message}). Make sure you've installed and fully trusted the certificate (Settings → General → About → Certificate Trust Settings), then reload this page.`;
+        cameraErrorEl.style.display = 'block';
+      }
+    }
+
+    function stopLiveCamera() {
+      if (liveStream) {
+        liveStream.getTracks().forEach((track) => track.stop());
+        liveStream = null;
+      }
+    }
+
+    shutterBtn.addEventListener('click', () => {
+      if (!liveVideoEl.videoWidth) return;
+      const canvas = document.createElement('canvas');
+      canvas.width = liveVideoEl.videoWidth;
+      canvas.height = liveVideoEl.videoHeight;
+      canvas.getContext('2d').drawImage(liveVideoEl, 0, 0);
+      canvas.toBlob((blob) => {
+        if (!blob) return;
+        const file = new File([blob], `scan-${Date.now()}.jpg`, { type: 'image/jpeg', lastModified: Date.now() });
+        intakePhoto(file);
+      }, 'image/jpeg', 0.92);
+    });
+
+    // --- Scan editor: drag-to-align perspective correction + B/W filter ---
+    const scanEditorEl = document.getElementById('scan-editor');
+    const scanProgressEl = document.getElementById('scan-progress');
+    const scanStageEl = document.getElementById('scan-stage');
+    const scanImageEl = document.getElementById('scan-image');
+    const scanPolygonEl = document.getElementById('scan-polygon');
+    const scanProcessingEl = document.getElementById('scan-processing');
+    const scanGrayscaleBtn = document.getElementById('scan-grayscale-btn');
+    const scanRetakeBtn = document.getElementById('scan-retake-btn');
+    const scanUseBtn = document.getElementById('scan-use-btn');
+    const cornerHandles = Array.from(document.querySelectorAll('.corner-handle'));
+
+    let scanCorners = null; // { tl, tr, br, bl }, each { x, y } in percent (0-100)
+    let scanGrayscale = false;
+    let scanResolve = null;
+    let scanSourceUrl = null;
+    let scanSourceFile = null;
+
+    function updateScanOverlay() {
+      cornerHandles.forEach((handle) => {
+        const c = scanCorners[handle.dataset.corner];
+        handle.style.left = `${c.x}%`;
+        handle.style.top = `${c.y}%`;
+      });
+      const order = ['tl', 'tr', 'br', 'bl'];
+      scanPolygonEl.setAttribute('points', order.map((k) => `${scanCorners[k].x},${scanCorners[k].y}`).join(' '));
+    }
+
+    let activeHandle = null;
+    cornerHandles.forEach((handle) => {
+      handle.addEventListener('pointerdown', (e) => {
+        activeHandle = handle;
+        handle.setPointerCapture(e.pointerId);
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (activeHandle !== handle) return;
+        const rect = scanStageEl.getBoundingClientRect();
+        const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
+        const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+        scanCorners[handle.dataset.corner] = { x, y };
+        updateScanOverlay();
+      });
+      handle.addEventListener('pointerup', () => { activeHandle = null; });
+    });
+
+    function setScanGrayscale(on) {
+      scanGrayscale = on;
+      scanGrayscaleBtn.textContent = `B/W filter: ${on ? 'on' : 'off'}`;
+      scanGrayscaleBtn.classList.toggle('active', on);
+      scanImageEl.style.filter = on ? 'grayscale(1)' : 'none';
+    }
+
+    scanGrayscaleBtn.addEventListener('click', () => setScanGrayscale(!scanGrayscale));
+
+    const DEFAULT_SCAN_CORNERS = {
+      tl: { x: 8, y: 8 },
+      tr: { x: 92, y: 8 },
+      br: { x: 92, y: 92 },
+      bl: { x: 8, y: 92 }
+    };
+
+    // Guesses the page's bounding box by sampling a downscaled copy of the
+    // photo: the border is assumed to be background, and pixels that
+    // contrast enough against it are grouped into connected regions (4-way
+    // flood fill) rather than just bounding ALL of them together — a single
+    // stray shadow, glare spot, or object elsewhere in frame would otherwise
+    // drag a naive bounding box out to include it. Only the single largest
+    // connected region is used, and only if it's clearly dominant (not a
+    // fragmented, ambiguous scene). Returns null (falls back to the generic
+    // inset) when nothing is confident enough.
+    function autoDetectCorners(imgEl) {
+      const maxDim = 200;
+      const scale = Math.min(1, maxDim / Math.max(imgEl.naturalWidth, imgEl.naturalHeight));
+      const w = Math.max(1, Math.round(imgEl.naturalWidth * scale));
+      const h = Math.max(1, Math.round(imgEl.naturalHeight * scale));
+
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(imgEl, 0, 0, w, h);
+      let data;
+      try {
+        data = ctx.getImageData(0, 0, w, h).data;
+      } catch {
+        return null;
+      }
+
+      const luminance = (i) => 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+
+      const borderSamples = [];
+      for (let x = 0; x < w; x += 2) {
+        borderSamples.push(luminance(x * 4));
+        borderSamples.push(luminance(((h - 1) * w + x) * 4));
+      }
+      for (let y = 0; y < h; y += 2) {
+        borderSamples.push(luminance(y * w * 4));
+        borderSamples.push(luminance((y * w + (w - 1)) * 4));
+      }
+      borderSamples.sort((a, b) => a - b);
+      const background = borderSamples[Math.floor(borderSamples.length / 2)];
+
+      const threshold = 30;
+      const foreground = new Uint8Array(w * h);
+      let totalForeground = 0;
+      for (let i = 0; i < w * h; i += 1) {
+        if (Math.abs(luminance(i * 4) - background) > threshold) {
+          foreground[i] = 1;
+          totalForeground += 1;
+        }
+      }
+
+      const area = w * h;
+      if (totalForeground < area * 0.02) return null; // too little contrast anywhere to trust
+
+      // Label connected components with an iterative (non-recursive) flood
+      // fill, tracking each one's pixel count and bounding box.
+      const visited = new Uint8Array(w * h);
+      const stack = [];
+      let best = null;
+
+      for (let start = 0; start < w * h; start += 1) {
+        if (!foreground[start] || visited[start]) continue;
+
+        let count = 0;
+        let minX = w, minY = h, maxX = 0, maxY = 0;
+        stack.push(start);
+        visited[start] = 1;
+
+        while (stack.length) {
+          const i = stack.pop();
+          const x = i % w;
+          const y = (i - x) / w;
+          count += 1;
+          if (x < minX) minX = x;
+          if (x > maxX) maxX = x;
+          if (y < minY) minY = y;
+          if (y > maxY) maxY = y;
+
+          if (x > 0 && foreground[i - 1] && !visited[i - 1]) { visited[i - 1] = 1; stack.push(i - 1); }
+          if (x < w - 1 && foreground[i + 1] && !visited[i + 1]) { visited[i + 1] = 1; stack.push(i + 1); }
+          if (y > 0 && foreground[i - w] && !visited[i - w]) { visited[i - w] = 1; stack.push(i - w); }
+          if (y < h - 1 && foreground[i + w] && !visited[i + w]) { visited[i + w] = 1; stack.push(i + w); }
+        }
+
+        if (!best || count > best.count) {
+          best = { count, minX, minY, maxX, maxY };
+        }
+      }
+
+      if (!best) return null;
+
+      const boxArea = Math.max(0, best.maxX - best.minX) * Math.max(0, best.maxY - best.minY);
+      const dominant = best.count >= totalForeground * 0.5; // guards against a fragmented, ambiguous scene
+      if (!dominant || boxArea < area * 0.15 || boxArea > area * 0.95) {
+        return null;
+      }
+
+      const { minX, minY, maxX, maxY } = best;
+      return {
+        tl: { x: (minX / w) * 100, y: (minY / h) * 100 },
+        tr: { x: ((maxX + 1) / w) * 100, y: (minY / h) * 100 },
+        br: { x: ((maxX + 1) / w) * 100, y: ((maxY + 1) / h) * 100 },
+        bl: { x: (minX / w) * 100, y: ((maxY + 1) / h) * 100 }
+      };
+    }
+
+    function openScanEditor(file, progress) {
+      return new Promise((resolve) => {
+        scanResolve = resolve;
+        scanSourceFile = file;
+        scanSourceUrl = URL.createObjectURL(file);
+        setScanGrayscale(false);
+        scanProgressEl.textContent = progress ? `Photo ${progress.current} of ${progress.total}` : '';
+        scanProcessingEl.style.display = 'none';
+        scanEditorEl.style.display = 'block';
+
+        // Hide the handles/outline until auto-detection finishes (needs the
+        // image's natural size), so the previous photo's quad doesn't flash
+        // up first.
+        scanCorners = null;
+        scanPolygonEl.setAttribute('points', '');
+        cornerHandles.forEach((h) => { h.style.visibility = 'hidden'; });
+
+        scanImageEl.onload = () => {
+          scanCorners = autoDetectCorners(scanImageEl) || { ...DEFAULT_SCAN_CORNERS };
+          cornerHandles.forEach((h) => { h.style.visibility = ''; });
+          updateScanOverlay();
+        };
+        scanImageEl.src = scanSourceUrl;
+      });
+    }
+
+    function closeScanEditor() {
+      scanEditorEl.style.display = 'none';
+      if (scanSourceUrl) URL.revokeObjectURL(scanSourceUrl);
+      scanSourceUrl = null;
+      scanSourceFile = null;
+    }
+
+    scanRetakeBtn.addEventListener('click', () => {
+      const resolve = scanResolve;
+      closeScanEditor();
+      if (resolve) resolve(null);
+    });
+
+    scanUseBtn.addEventListener('click', () => {
+      scanProcessingEl.style.display = 'block';
+      // Let the "Processing…" message paint before the (synchronous, CPU-bound) warp runs.
+      setTimeout(() => {
+        const naturalW = scanImageEl.naturalWidth;
+        const naturalH = scanImageEl.naturalHeight;
+        const pixelCorners = {};
+        for (const key of ['tl', 'tr', 'br', 'bl']) {
+          pixelCorners[key] = { x: (scanCorners[key].x / 100) * naturalW, y: (scanCorners[key].y / 100) * naturalH };
+        }
+
+        const topW = distance(pixelCorners.tl, pixelCorners.tr);
+        const bottomW = distance(pixelCorners.bl, pixelCorners.br);
+        const leftH = distance(pixelCorners.tl, pixelCorners.bl);
+        const rightH = distance(pixelCorners.tr, pixelCorners.br);
+        const maxDim = 2000;
+        let outW = Math.round(Math.max(topW, bottomW));
+        let outH = Math.round(Math.max(leftH, rightH));
+        if (Math.max(outW, outH) > maxDim) {
+          const scale = maxDim / Math.max(outW, outH);
+          outW = Math.round(outW * scale);
+          outH = Math.round(outH * scale);
+        }
+        outW = Math.max(1, outW);
+        outH = Math.max(1, outH);
+
+        const canvas = perspectiveWarp(scanImageEl, pixelCorners, outW, outH, scanGrayscale);
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            scanProcessingEl.style.display = 'none';
+            return;
+          }
+          const name = scanSourceFile && scanSourceFile.name ? scanSourceFile.name : `scan-${Date.now()}.jpg`;
+          const file = new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() });
+          const resolve = scanResolve;
+          closeScanEditor();
+          if (resolve) resolve(file);
+        }, 'image/jpeg', 0.9);
+      }, 30);
+    });
+
+    function distance(a, b) {
+      return Math.hypot(a.x - b.x, a.y - b.y);
+    }
+
+    function lerpPt(a, b, t) {
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+
+    // Solves the affine transform (a,b,c,d,e,f) mapping 3 source points to 3
+    // dest points — used per-strip below since Canvas 2D has no native
+    // projective (4-point) transform.
+    function solveAffine(src, dst) {
+      const [p0, p1, p2] = src;
+      const [q0, q1, q2] = dst;
+      const denom = (p1.x - p0.x) * (p2.y - p0.y) - (p2.x - p0.x) * (p1.y - p0.y);
+      if (Math.abs(denom) < 1e-9) return null;
+
+      function solveFor(qa, qb, qc) {
+        const m = ((qb - qa) * (p2.y - p0.y) - (qc - qa) * (p1.y - p0.y)) / denom;
+        const n = ((qc - qa) * (p1.x - p0.x) - (qb - qa) * (p2.x - p0.x)) / denom;
+        const o = qa - m * p0.x - n * p0.y;
+        return [m, n, o];
+      }
+
+      const [a, c, e] = solveFor(q0.x, q1.x, q2.x);
+      const [b, d, f] = solveFor(q0.y, q1.y, q2.y);
+      return { a, b, c, d, e, f };
+    }
+
+    // Approximates a full 4-corner perspective correction by slicing the
+    // output into many thin horizontal strips and affine-mapping each one
+    // (using its top-left/top-right/bottom-left corners) — Canvas 2D has no
+    // true projective transform, but at a few hundred strips the per-strip
+    // affine approximation is visually indistinguishable from a real one.
+    function perspectiveWarp(imgEl, corners, outW, outH, grayscale) {
+      const { tl, tr, br, bl } = corners;
+      const canvas = document.createElement('canvas');
+      canvas.width = outW;
+      canvas.height = outH;
+      const ctx = canvas.getContext('2d');
+      ctx.filter = grayscale ? 'grayscale(1)' : 'none';
+
+      const strips = Math.min(outH, 400);
+      const stripH = outH / strips;
+
+      for (let i = 0; i < strips; i += 1) {
+        const t0 = i / strips;
+        const t1 = (i + 1) / strips;
+        const srcTL = lerpPt(tl, bl, t0);
+        const srcTR = lerpPt(tr, br, t0);
+        const srcBL = lerpPt(tl, bl, t1);
+
+        const destTL = { x: 0, y: i * stripH };
+        const destTR = { x: outW, y: i * stripH };
+        const destBL = { x: 0, y: (i + 1) * stripH };
+
+        const m = solveAffine([srcTL, srcTR, srcBL], [destTL, destTR, destBL]);
+        if (!m) continue;
+
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.beginPath();
+        ctx.rect(0, i * stripH - 0.5, outW, stripH + 1);
+        ctx.clip();
+        ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f);
+        ctx.drawImage(imgEl, 0, 0);
+        ctx.restore();
+      }
+
+      return canvas;
+    }
 
     // --- Get from PC (browse & download) ---
     const upBtn = document.getElementById('up-btn');

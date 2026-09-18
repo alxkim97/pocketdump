@@ -1,6 +1,8 @@
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const path = require('path');
 const crypto = require('crypto');
 
@@ -60,12 +62,30 @@ function resolveSafePath(base, relPath) {
   return target;
 }
 
-function startServer({ port, getDestinationFolder, getSourceFolder, onUpload }) {
+function startServer({ port, httpsPort, certOptions, appVersion, getDestinationFolder, getSourceFolder, onUpload }) {
   const app = express();
   const upload = multer({ storage: multer.memoryStorage() });
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'mobile', 'index.html'));
+  });
+
+  // Lets the mobile page discover the HTTPS port for the live-camera view
+  // without hardcoding it in two places.
+  app.get('/config', (req, res) => {
+    res.json({ port, httpsPort: certOptions ? httpsPort : null, version: appVersion || null });
+  });
+
+  // Serves the self-signed CA cert for the phone to download and install as
+  // a trusted profile — the one-time step that unlocks the live camera view
+  // (getUserMedia needs a secure context, which a plain-HTTP LAN address
+  // isn't). Served over the plain HTTP listener so there's no trust
+  // chicken-and-egg problem fetching it in the first place.
+  app.get('/cert', (req, res) => {
+    if (!certOptions) return res.status(404).json({ error: 'HTTPS is not set up.' });
+    res.set('Content-Type', 'application/x-x509-ca-cert');
+    res.set('Content-Disposition', 'attachment; filename="pocketdump-ca.pem"');
+    res.send(certOptions.cert);
   });
 
   app.post('/upload', upload.single('file'), (req, res) => {
@@ -205,12 +225,14 @@ function startServer({ port, getDestinationFolder, getSourceFolder, onUpload }) 
     if (!res.headersSent) res.status(400).json({ error: 'Upload interrupted.' });
   });
 
-  const server = app.listen(port);
-  return server;
+  const httpServer = http.createServer(app).listen(port);
+  const httpsServer = certOptions ? https.createServer(certOptions, app).listen(httpsPort) : null;
+  return { httpServer, httpsServer };
 }
 
-function stopServer(server) {
-  server.close();
+function stopServer({ httpServer, httpsServer }) {
+  if (httpServer) httpServer.close();
+  if (httpsServer) httpsServer.close();
 }
 
 // Walks the destination folder and rebuilds the dedupe manifest from scratch,

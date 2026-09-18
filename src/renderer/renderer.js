@@ -84,7 +84,7 @@ window.pocketdump.onServerInfo(({ url, qrDataUrl, address, candidates }) => {
     candidates.forEach((c) => {
       const option = document.createElement('option');
       option.value = c.address;
-      option.textContent = `${c.address} (${c.name})`;
+      option.textContent = c.address === 'mdns' ? c.name : `${c.address} (${c.name})`;
       if (c.address === address) option.selected = true;
       networkSelectEl.appendChild(option);
     });

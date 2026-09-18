@@ -4,13 +4,19 @@ const os = require('os');
 const fs = require('fs');
 const QRCode = require('qrcode');
 const { autoUpdater } = require('electron-updater');
+const { Bonjour } = require('bonjour-service');
 const { startServer, stopServer, rebuildIndex } = require('./server');
+const { getOrCreateCert } = require('./cert');
 
 const PORT = 8989;
+const HTTPS_PORT = 8990;
+const MDNS_HOST = 'pocketdump.local';
 let mainWindow;
 let destinationFolder = null;
 let sourceFolder = null;
 let serverInstance = null;
+let bonjourInstance = null;
+let mdnsAvailable = false;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 
@@ -124,15 +130,45 @@ function pickBestCandidate(candidates) {
 }
 
 async function buildServerInfo(address) {
-  const url = `http://${address}:${PORT}`;
+  const host = address === 'mdns' ? MDNS_HOST : address;
+  const url = `http://${host}:${PORT}`;
   const qrDataUrl = await QRCode.toDataURL(url);
   return { url, qrDataUrl, address };
 }
 
 async function sendServerInfo(address) {
   const candidates = listIPv4Candidates();
+  // Offered first, ahead of specific IPs, when mDNS is up — this is the
+  // address that keeps working across networks/PCs without a fresh QR scan.
+  if (mdnsAvailable) {
+    candidates.unshift({ name: `Recommended — works on any network (${MDNS_HOST})`, address: 'mdns' });
+  }
   const info = await buildServerInfo(address);
   mainWindow.webContents.send('server-info', { ...info, candidates });
+}
+
+function startMdns() {
+  try {
+    bonjourInstance = new Bonjour({}, (err) => {
+      console.error('mDNS error:', err);
+    });
+    bonjourInstance.publish({ name: 'PocketDump', type: 'http', port: PORT, host: MDNS_HOST });
+    mdnsAvailable = true;
+  } catch (err) {
+    console.error('Could not start mDNS — pocketdump.local will be unavailable:', err);
+    mdnsAvailable = false;
+  }
+}
+
+function stopMdns() {
+  if (!bonjourInstance) return;
+  // Grab a stable reference before clearing the module-level one — the
+  // unpublishAll callback fires asynchronously, after bonjourInstance has
+  // already been reset to null, so closing over that variable directly
+  // would call .destroy() on null.
+  const instance = bonjourInstance;
+  bonjourInstance = null;
+  instance.unpublishAll(() => instance.destroy());
 }
 
 async function createWindow() {
@@ -158,11 +194,32 @@ async function createWindow() {
   notifyFolder();
   notifySourceFolder();
 
+  startMdns();
+
+  // Self-signed cert for the HTTPS listener the live camera view needs
+  // (getUserMedia requires a secure context). Covers every LAN address this
+  // PC currently has, plus the mDNS hostname if that's up too — otherwise
+  // opening the live camera via pocketdump.local would fail with a
+  // hostname-mismatch error even though the cert itself is trusted. Doesn't
+  // need regenerating — and re-trusting on the phone — unless the set of
+  // addresses changes (e.g. a new network).
+  let certOptions = null;
+  try {
+    const certAddresses = listIPv4Candidates().map((c) => c.address);
+    if (mdnsAvailable) certAddresses.push(MDNS_HOST);
+    certOptions = getOrCreateCert(app.getPath('userData'), certAddresses);
+  } catch (err) {
+    console.error('Could not set up HTTPS cert — live camera view will be unavailable:', err);
+  }
+
   // Start listening immediately so the QR code is connectable right away;
   // /upload returns a friendly error until a destination folder is chosen,
   // and /browse + /file do the same until a source folder is shared.
   serverInstance = startServer({
     port: PORT,
+    httpsPort: HTTPS_PORT,
+    certOptions,
+    appVersion: app.getVersion(),
     getDestinationFolder: () => destinationFolder,
     getSourceFolder: () => sourceFolder,
     onUpload: (info) => mainWindow.webContents.send('upload-event', info)
@@ -170,7 +227,7 @@ async function createWindow() {
 
   const candidates = listIPv4Candidates();
   const best = pickBestCandidate(candidates);
-  await sendServerInfo(best.address);
+  await sendServerInfo(mdnsAvailable ? 'mdns' : best.address);
 }
 
 ipcMain.handle('select-network', async (_event, address) => {
@@ -243,5 +300,6 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   if (serverInstance) stopServer(serverInstance);
+  stopMdns();
   if (process.platform !== 'darwin') app.quit();
 });
