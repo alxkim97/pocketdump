@@ -1,11 +1,25 @@
 * { box-sizing: border-box; }
+/* Browser default <p> margin (~1em top/bottom) was never reset, so every
+   plain paragraph without its own explicit margin (description text, the
+   server URL, folder paths) was carrying unintended spacing — a real
+   contributor to the window measuring far taller than the layout intended.
+   Spacing that's actually wanted is added back explicitly, per element. */
+p { margin: 0; }
 
 :root {
   --bg: #f4f5f7;
   --card-bg: #ffffff;
   --text: #1c1c1e;
   --muted: #6e6e73;
-  --accent: #0a84ff;
+  /* #0a84ff (the original accent) is only 3.65:1 against white — below the
+     4.5:1 floor for text under 18pt. Used as TEXT (links), it needs to be
+     darker; #0060df measures 5.61:1 on white. */
+  --accent: #0060df;
+  /* Button backgrounds pair with white text, so this needs to stay dark
+     enough for that regardless of app theme — same value in both themes,
+     verified 5.61:1 against white. Kept as a separate token from --accent
+     since that one adapts per-theme for its own (different) contrast needs. */
+  --accent-fill: #0060df;
   --border: #eee;
   --dot-idle: #c7c7cc;
   --dot-active: #34c759;
@@ -16,7 +30,10 @@
   --card-bg: #2a2a2d;
   --text: #f2f2f7;
   --muted: #a0a0a6;
+  /* #409cff already measures 5.05:1 against the dark card background as
+     text — unlike the light-mode value, this one didn't need correcting. */
   --accent: #409cff;
+  --accent-fill: #0060df;
   --border: #3a3a3d;
   --dot-idle: #5a5a5e;
   --dot-active: #30d158;
@@ -25,9 +42,10 @@
 body {
   font-family: -apple-system, "Segoe UI", Arial, sans-serif;
   margin: 0;
-  padding: 24px;
+  padding: 20px;
   background: var(--bg);
   color: var(--text);
+  transition: background-color 180ms ease, color 180ms ease;
 }
 .top-bar {
   display: flex;
@@ -35,32 +53,62 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
-h1 { margin: 0 0 4px; }
-.subtitle { margin: 0 0 20px; color: var(--muted); }
+h1 { margin: 0 0 4px; font-size: 20px; }
+.subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 .card {
   background: var(--card-bg);
   border-radius: 12px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+  transition: background-color 180ms ease;
 }
-.card h2 { margin: 0 0 8px; font-size: 16px; }
-.muted { color: var(--muted); font-size: 13px; }
+.card h2 { margin: 0 0 6px; font-size: 15px; }
+.optional-tag {
+  font-size: 11px;
+  font-weight: normal;
+  color: var(--muted);
+}
+.muted { color: var(--muted); font-size: 13px; transition: color 180ms ease; }
 button {
-  background: var(--accent);
+  background: var(--accent-fill);
   color: #fff;
   border: none;
   border-radius: 8px;
   padding: 10px 16px;
   font-size: 14px;
   cursor: pointer;
+  transition: transform 140ms ease-out, background-color 180ms ease;
+}
+button:active {
+  transform: scale(0.97);
 }
 button.link {
   background: none;
   color: var(--accent);
-  padding: 4px 0;
+  padding: 6px 0;
   text-decoration: underline;
   font-size: 13px;
+  transition: transform 140ms ease-out, opacity 150ms ease;
+}
+button.link:hover {
+  opacity: 0.75;
+}
+.hint-details {
+  margin-top: 10px;
+}
+.hint-details summary {
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+}
+.hint-details p {
+  margin: 6px 0 0;
+  animation: hint-fade-in 200ms ease-out;
+}
+@keyframes hint-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 .theme-toggle {
   flex-shrink: 0;
@@ -82,14 +130,26 @@ button.link {
   background: var(--border);
 }
 .theme-toggle:active {
-  transform: scale(0.92);
+  transform: scale(0.95);
 }
 #qr {
   display: block;
-  width: 180px;
-  height: 180px;
+  width: 150px;
+  height: 150px;
   margin: 8px 0;
   border-radius: 8px;
+}
+/* Targeted spacing now that the blanket <p> margin is gone — only where a
+   button or path text directly follows a paragraph and would otherwise
+   sit flush against it. */
+#choose-folder, #choose-source-folder {
+  margin-top: 8px;
+}
+#folder-path, #source-folder-path {
+  margin-top: 6px;
+}
+#open-folder, #open-source-folder {
+  margin-top: 6px;
 }
 .rebuild-row {
   margin-top: 10px;
@@ -102,10 +162,7 @@ button.link {
 }
 label[for="network-select"] {
   display: block;
-  margin-top: 12px;
-}
-.hint {
-  margin-top: 12px;
+  margin-top: 10px;
 }
 #network-select {
   margin-top: 4px;
@@ -116,6 +173,7 @@ label[for="network-select"] {
   color: var(--text);
   font-size: 13px;
   width: 100%;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
 .status-line {
   display: flex;
@@ -130,7 +188,7 @@ label[for="network-select"] {
   height: 10px;
   border-radius: 50%;
   background: var(--dot-idle);
-  transition: background 0.2s ease;
+  transition: background-color 200ms ease, box-shadow 200ms ease;
 }
 .status-dot.active {
   background: var(--dot-active);
@@ -147,6 +205,18 @@ label[for="network-select"] {
 #upload-log li {
   padding: 4px 0;
   border-bottom: 1px solid var(--border);
+  opacity: 1;
+  transform: translateY(0);
+  transition: opacity 220ms ease-out, transform 220ms ease-out;
+}
+/* A new transfer landing is a real, occasional state change (not a
+   repeated/keyboard action), so it earns a small entrance instead of just
+   popping into the list. */
+@starting-style {
+  #upload-log li {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
 }
 #upload-log li.duplicate { color: #aa6c00; }
 #upload-log li.saved { color: #1c8d3a; }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, screen } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -12,6 +12,9 @@ const PORT = 8989;
 const HTTPS_PORT = 8990;
 const MDNS_HOST = 'pocketdump.local';
 let mainWindow;
+let tray = null;
+let isQuitting = false;
+let updateDownloaded = false;
 let destinationFolder = null;
 let sourceFolder = null;
 let serverInstance = null;
@@ -39,6 +42,8 @@ function saveSettings(settings) {
 autoUpdater.autoInstallOnAppQuit = true;
 
 autoUpdater.on('update-downloaded', (info) => {
+  updateDownloaded = true;
+  rebuildTrayMenu();
   dialog.showMessageBox({
     type: 'info',
     title: 'PocketDump update ready',
@@ -171,15 +176,58 @@ function stopMdns() {
   instance.unpublishAll(() => instance.destroy());
 }
 
+function rebuildTrayMenu() {
+  const startAtLogin = app.getLoginItemSettings().openAtLogin;
+  tray.setContextMenu(Menu.buildFromTemplate([
+    { label: 'Open PocketDump', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { type: 'separator' },
+    {
+      label: 'Start with Windows',
+      type: 'checkbox',
+      checked: startAtLogin,
+      click: (item) => {
+        app.setLoginItemSettings({ openAtLogin: item.checked });
+      }
+    },
+    { type: 'separator' },
+    updateDownloaded
+      ? { label: 'Restart to Install Update', click: () => { isQuitting = true; autoUpdater.quitAndInstall(); } }
+      : { label: 'Check for Updates', click: () => checkForUpdates(true) },
+    { type: 'separator' },
+    { label: 'Quit PocketDump', click: () => { isQuitting = true; app.quit(); } }
+  ]));
+}
+
+function createTray() {
+  tray = new Tray(path.join(__dirname, 'assets', 'icon.ico'));
+  tray.setToolTip('PocketDump');
+  rebuildTrayMenu();
+  tray.on('click', () => { mainWindow.show(); mainWindow.focus(); });
+}
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 480,
-    height: 760,
-    resizable: false,
+    height: 740,
+    // Left resizable during creation so the auto-sizing below can actually
+    // take effect — setContentSize() on an already non-resizable window is
+    // unreliable on Windows. Locked down with setResizable(false) once the
+    // real size is set.
+    resizable: true,
+    show: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
+  });
+
+  // Closing the window just hides it — the server keeps running in the
+  // background (tray icon) so the phone can keep sending files without the
+  // window needing to stay open. Only the tray's "Quit" actually exits.
+  mainWindow.on('close', (event) => {
+    if (isQuitting) return;
+    event.preventDefault();
+    mainWindow.hide();
   });
 
   await mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
@@ -193,6 +241,33 @@ async function createWindow() {
   }
   notifyFolder();
   notifySourceFolder();
+
+  // The window's height needs to fit whichever state is currently showing —
+  // a returning user with folders already chosen sees two extra "Open
+  // folder" / "Rebuild index" rows that an empty-state layout doesn't have,
+  // so a fixed guess drifts out of sync with the content. Measuring the
+  // actual rendered height and sizing to it stays correct regardless.
+  // The short wait lets the renderer finish handling the folder-info IPC
+  // messages just sent above before layout is measured. Falls back to the
+  // constructor's default height if measurement fails for any reason —
+  // never worth leaving the window unshown over a sizing nicety.
+  try {
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    const contentHeight = await mainWindow.webContents.executeJavaScript('document.body.scrollHeight');
+    const maxHeight = screen.getPrimaryDisplay().workAreaSize.height - 60;
+    const targetHeight = Math.min(Math.ceil(contentHeight), maxHeight);
+    mainWindow.setContentSize(480, targetHeight);
+  } catch (err) {
+    console.error('Could not auto-size window to content:', err);
+  }
+  mainWindow.setResizable(false);
+
+  // Skip showing the window when launched by "Start with Windows" — avoids
+  // a window flashing on screen just to immediately disappear, and skips
+  // the paint/compositing work entirely on a background boot-time launch.
+  if (!app.getLoginItemSettings().wasOpenedAtLogin) {
+    mainWindow.show();
+  }
 
   startMdns();
 
@@ -285,10 +360,20 @@ ipcMain.handle('check-for-updates', () => {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+
+  // Default to starting with Windows, but only ever set this automatically
+  // on the very first-ever launch — once the user has an explicit
+  // openAtLogin state (on or off), respect it and never touch it again.
+  if (!app.getLoginItemSettings().wasOpenedAtLogin && !app.getLoginItemSettings().openAtLogin) {
+    app.setLoginItemSettings({ openAtLogin: true });
+  }
+
   createWindow();
+  createTray();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    else mainWindow.show();
   });
 
   // Delay the first check past startup so it doesn't compete with the
@@ -296,6 +381,10 @@ app.whenReady().then(() => {
   // stay open for a while without being relaunched.
   setTimeout(() => checkForUpdates(false), 10_000);
   setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
+});
+
+app.on('before-quit', () => {
+  isQuitting = true;
 });
 
 app.on('window-all-closed', () => {

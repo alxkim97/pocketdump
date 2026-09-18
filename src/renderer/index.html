@@ -15,48 +15,49 @@
   </header>
 
   <section class="card">
-    <h2>1. Scan with your iPhone</h2>
-    <p class="muted">Open the Camera app on your iPhone and scan this code, or open the link in Safari (same WiFi network required).</p>
+    <h2>📱 Scan with iPhone</h2>
     <img id="qr" alt="QR code" />
     <p id="server-url" class="muted"></p>
-    <label for="network-select" class="muted">If the QR code doesn't connect, pick a different network:</label>
+    <label for="network-select" class="muted">Different network:</label>
     <select id="network-select"></select>
-    <p class="muted hint">Tip: for a wired connection, turn on Personal Hotspot and plug in the USB cable — the iPhone's USB network will show up in this list (needs Apple Mobile Device Support / iTunes drivers on Windows).</p>
+    <details class="hint-details">
+      <summary>Wired connection tip</summary>
+      <p class="muted">Turn on Personal Hotspot and plug in the USB cable — the iPhone's USB network will show up in this list (needs Apple Mobile Device Support / iTunes drivers on Windows).</p>
+    </details>
   </section>
 
   <section class="card">
-    <h2>2. Choose a destination folder</h2>
-    <p class="muted">Files your iPhone sends land here, sorted into dated folders.</p>
+    <h2>📥 Destination folder</h2>
+    <p class="muted">Files from your iPhone land here, sorted by date.</p>
     <button id="choose-folder">Choose folder…</button>
     <p id="folder-path" class="muted">No folder selected yet</p>
-    <button id="open-folder" class="link" style="display:none">Open folder</button>
+    <button id="open-folder" class="link" style="display:none">📂 Open folder</button>
     <div class="rebuild-row">
-      <button id="rebuild-index" class="link" style="display:none">Rebuild duplicate index</button>
+      <button id="rebuild-index" class="link" style="display:none">🔁 Rebuild duplicate index</button>
       <p id="rebuild-status" class="muted"></p>
     </div>
   </section>
 
   <section class="card">
-    <h2>3. Choose a folder to share (optional)</h2>
-    <p class="muted">Your iPhone can browse and download files from this folder.</p>
+    <h2>📤 Share folder <span class="optional-tag">optional</span></h2>
+    <p class="muted">Browse &amp; download files from your iPhone.</p>
     <button id="choose-source-folder">Choose folder…</button>
     <p id="source-folder-path" class="muted">No folder shared yet</p>
-    <button id="open-source-folder" class="link" style="display:none">Open folder</button>
+    <button id="open-source-folder" class="link" style="display:none">📂 Open folder</button>
   </section>
 
   <section class="card">
-    <h2>4. Transfer status</h2>
+    <h2>📡 Status</h2>
     <p class="status-line">
       <span id="status-dot" class="status-dot"></span>
       <span id="status-text">Idle — waiting for your iPhone</span>
     </p>
-    <p class="muted">Files are sorted automatically into dated folders (YYYY-MM-DD) and duplicates are skipped.</p>
     <ul id="upload-log"></ul>
   </section>
 
   <footer id="app-footer" class="muted">
     <span id="app-footer-text"></span>
-    · <button id="check-updates-btn" class="link-btn" type="button">Check for Updates</button>
+    · <button id="check-updates-btn" class="link-btn" type="button">🔄 Check for Updates</button>
   </footer>
 
   <script src="renderer.js"></script>
