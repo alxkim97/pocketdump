@@ -358,7 +358,23 @@ ipcMain.handle('check-for-updates', () => {
   checkForUpdates(true);
 });
 
+// Only one copy may run: a second launch would try to bind the same ports
+// (EADDRINUSE). Since the app now lives in the tray, clicking the icon again
+// just brings the existing window forward instead.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!mainWindow) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+  });
+}
+
 app.whenReady().then(() => {
+  if (!gotSingleInstanceLock) return;
   Menu.setApplicationMenu(null);
 
   // Default to starting with Windows, but only ever set this automatically
@@ -388,6 +404,7 @@ app.on('before-quit', () => {
 });
 
 app.on('window-all-closed', () => {
+  if (!gotSingleInstanceLock) return;
   if (serverInstance) stopServer(serverInstance);
   stopMdns();
   if (process.platform !== 'darwin') app.quit();
