@@ -380,7 +380,11 @@ app.whenReady().then(() => {
   // Default to starting with Windows, but only ever set this automatically
   // on the very first-ever launch — once the user has an explicit
   // openAtLogin state (on or off), respect it and never touch it again.
-  if (!app.getLoginItemSettings().wasOpenedAtLogin && !app.getLoginItemSettings().openAtLogin) {
+  // Skip entirely when running unpackaged (npm start): with no installed
+  // .exe to point at, Electron would register the raw dev binary itself
+  // (node_modules\electron\dist\electron.exe, no app path) as the startup
+  // target, launching Electron's own blank placeholder window on every boot.
+  if (app.isPackaged && !app.getLoginItemSettings().wasOpenedAtLogin && !app.getLoginItemSettings().openAtLogin) {
     app.setLoginItemSettings({ openAtLogin: true });
   }
 
