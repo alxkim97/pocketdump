@@ -1,6 +1,6 @@
 {
   "name": "pocketdump",
-  "version": "0.10.2",
+  "version": "0.10.3",
   "description": "Transfer photos, videos and files between iPhone and PC over local WiFi (or USB)",
   "author": "Alex Kim",
   "main": "src/main.js",

@@ -250,6 +250,15 @@
     .setup-card li {
       margin-bottom: 10px;
     }
+    .warning-note {
+      background: rgba(255, 149, 0, 0.12);
+      border: 1px solid #ff9500;
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 13px;
+      margin: 10px 0 0;
+    }
     .setup-card a.step-link {
       display: inline-block;
       margin-top: 4px;
@@ -307,7 +316,15 @@
       background: #000;
       z-index: 100;
       text-align: center;
+      /* Defensive fallback only — the flex layout below (stage flexing to
+         fill exactly what's left after the controls) is what actually
+         guarantees the controls stay reachable; this just protects against
+         an extreme viewport where flex still can't make it all fit. */
       overflow-y: auto;
+    }
+    #scan-editor.open {
+      display: flex;
+      flex-direction: column;
     }
     #scan-progress {
       color: #fff;
@@ -315,26 +332,46 @@
       font-weight: 600;
       padding: 12px 16px 0;
       margin: 0;
+      flex-shrink: 0;
     }
+    /* Flexes to fill whatever space the progress line and controls don't
+       need, so the photo + handles always fit on screen without scrolling —
+       previously a tall portrait photo could push "Use Photo" off-screen,
+       and touch-action:none on the image (needed for dragging) blocked the
+       swipe gesture that would otherwise reach it. */
     #scan-stage {
-      position: relative;
-      max-width: 100%;
-      margin: 0 auto;
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 8px;
       touch-action: none;
     }
-    #scan-stage img {
+    /* Sized to exactly match the photo's own rendered box (CSS grid does the
+       object-fit:contain math for us) so the overlay and handles' 0-100%
+       coordinates always land on the actual image, with no letterboxing
+       offset to account for. */
+    #scan-stack {
+      position: relative;
+      display: inline-grid;
+      max-width: 100%;
+      max-height: 100%;
+    }
+    #scan-stack > * { grid-area: 1 / 1; }
+    #scan-image {
       display: block;
-      width: 100%;
+      max-width: 100%;
+      max-height: 100%;
+      width: auto;
       height: auto;
     }
     #scan-overlay {
-      position: absolute;
-      inset: 0;
       width: 100%;
       height: 100%;
     }
-    #scan-overlay polygon {
-      fill: rgba(10, 132, 255, 0.12);
+    #scan-overlay #scan-polygon {
+      fill: none;
       stroke: #0a84ff;
       stroke-width: 1.5;
       vector-effect: non-scaling-stroke;
@@ -350,8 +387,19 @@
       border: 2px solid #fff;
       touch-action: none;
     }
+    /* Edge (midpoint) handles nudge one whole side in parallel, for finer
+       adjustment than dragging a corner alone — same visual language, a
+       touch smaller so the 4 corners stay the primary target. */
+    .edge-handle {
+      width: 22px;
+      height: 22px;
+      margin-left: -11px;
+      margin-top: -11px;
+      background: rgba(10, 132, 255, 0.7);
+    }
     .scan-editor-controls {
-      padding: 16px;
+      flex-shrink: 0;
+      padding: 16px 16px calc(16px + env(safe-area-inset-bottom, 0px));
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -410,6 +458,7 @@
 
       <details class="setup-card">
         <summary>🔒 Enable Live Camera (optional, one-time setup)</summary>
+        <p id="in-app-browser-warning" class="warning-note" style="display:none"></p>
         <ol>
           <li>
             Install the certificate.
@@ -450,12 +499,25 @@
   <div id="scan-editor">
     <p id="scan-progress"></p>
     <div id="scan-stage">
-      <img id="scan-image" alt="" />
-      <svg id="scan-overlay" viewBox="0 0 100 100" preserveAspectRatio="none"><polygon id="scan-polygon" points=""></polygon></svg>
-      <div class="corner-handle" data-corner="tl"></div>
-      <div class="corner-handle" data-corner="tr"></div>
-      <div class="corner-handle" data-corner="br"></div>
-      <div class="corner-handle" data-corner="bl"></div>
+      <div id="scan-stack">
+        <img id="scan-image" alt="" />
+        <svg id="scan-overlay" viewBox="0 0 100 100" preserveAspectRatio="none">
+          <mask id="scan-mask">
+            <rect x="0" y="0" width="100" height="100" fill="#fff"></rect>
+            <polygon id="scan-polygon-mask" points="" fill="#000"></polygon>
+          </mask>
+          <rect x="0" y="0" width="100" height="100" fill="rgba(0,0,0,0.55)" mask="url(#scan-mask)"></rect>
+          <polygon id="scan-polygon" points=""></polygon>
+        </svg>
+        <div class="corner-handle" data-corner="tl"></div>
+        <div class="corner-handle" data-corner="tr"></div>
+        <div class="corner-handle" data-corner="br"></div>
+        <div class="corner-handle" data-corner="bl"></div>
+        <div class="corner-handle edge-handle" data-edge="t"></div>
+        <div class="corner-handle edge-handle" data-edge="r"></div>
+        <div class="corner-handle edge-handle" data-edge="b"></div>
+        <div class="corner-handle edge-handle" data-edge="l"></div>
+      </div>
     </div>
     <div id="scan-processing">Processing…</div>
     <div class="scan-editor-controls">
@@ -488,6 +550,31 @@
 
   <script>
     const appVersionEl = document.getElementById('app-version');
+
+    // Installing the Live Camera certificate opens iOS's system "Install
+    // Profile" sheet — a mechanism only Safari itself can trigger. A page
+    // opened via a QR scan often lands inside another app's built-in
+    // browser instead (LINE's scanner, Instagram, etc.), which embeds a
+    // restricted WebView with no such sheet: the link just silently does
+    // nothing, with no error to explain why. Detected via the User-Agent
+    // marker each of these apps adds to its own in-app browser.
+    function detectInAppBrowser() {
+      const ua = navigator.userAgent || '';
+      if (/\bLine\//i.test(ua)) return 'LINE';
+      if (/FBAN|FBAV|FB_IAB/i.test(ua)) return 'Facebook';
+      if (/Instagram/i.test(ua)) return 'Instagram';
+      if (/MicroMessenger/i.test(ua)) return 'WeChat';
+      if (/BytedanceWebview|TikTok|musical_ly/i.test(ua)) return 'TikTok';
+      if (/Twitter/i.test(ua)) return 'X (Twitter)';
+      return null;
+    }
+
+    const inAppWarningEl = document.getElementById('in-app-browser-warning');
+    const inAppBrowserName = detectInAppBrowser();
+    if (inAppBrowserName && inAppWarningEl) {
+      inAppWarningEl.textContent = `You're viewing this inside ${inAppBrowserName}'s built-in browser — certificate install only works in Safari itself, and will silently fail here. Tap the ⋯ or share icon and choose "Open in Safari", then reopen this page there.`;
+      inAppWarningEl.style.display = 'block';
+    }
 
     // --- Tabs ---
     const tabSend = document.getElementById('tab-send');
@@ -868,14 +955,19 @@
     // --- Scan editor: drag-to-align perspective correction + B/W filter ---
     const scanEditorEl = document.getElementById('scan-editor');
     const scanProgressEl = document.getElementById('scan-progress');
-    const scanStageEl = document.getElementById('scan-stage');
+    const scanStackEl = document.getElementById('scan-stack');
     const scanImageEl = document.getElementById('scan-image');
     const scanPolygonEl = document.getElementById('scan-polygon');
+    const scanPolygonMaskEl = document.getElementById('scan-polygon-mask');
     const scanProcessingEl = document.getElementById('scan-processing');
     const scanGrayscaleBtn = document.getElementById('scan-grayscale-btn');
     const scanRetakeBtn = document.getElementById('scan-retake-btn');
     const scanUseBtn = document.getElementById('scan-use-btn');
-    const cornerHandles = Array.from(document.querySelectorAll('.corner-handle'));
+    const cornerHandles = Array.from(document.querySelectorAll('.corner-handle[data-corner]'));
+    const edgeHandles = Array.from(document.querySelectorAll('.corner-handle[data-edge]'));
+    const allScanHandles = [...cornerHandles, ...edgeHandles];
+    // Which two corners each edge handle sits between and moves together.
+    const EDGE_CORNERS = { t: ['tl', 'tr'], r: ['tr', 'br'], b: ['br', 'bl'], l: ['bl', 'tl'] };
 
     let scanCorners = null; // { tl, tr, br, bl }, each { x, y } in percent (0-100)
     let scanGrayscale = false;
@@ -883,16 +975,38 @@
     let scanSourceUrl = null;
     let scanSourceFile = null;
 
+    // A corner or edge dragged toward the photo's own border reliably stops
+    // a couple of percent short of 0/100 (touch imprecision), leaving a
+    // sliver of background in the final crop that's easy to miss until
+    // after uploading. Pull it the rest of the way once it's close.
+    const EDGE_SNAP = 4; // percent
+    function snapToImageEdge(pct) {
+      const clamped = Math.min(100, Math.max(0, pct));
+      if (clamped <= EDGE_SNAP) return 0;
+      if (clamped >= 100 - EDGE_SNAP) return 100;
+      return clamped;
+    }
+
     function updateScanOverlay() {
       cornerHandles.forEach((handle) => {
         const c = scanCorners[handle.dataset.corner];
         handle.style.left = `${c.x}%`;
         handle.style.top = `${c.y}%`;
       });
+      edgeHandles.forEach((handle) => {
+        const [k1, k2] = EDGE_CORNERS[handle.dataset.edge];
+        const p1 = scanCorners[k1];
+        const p2 = scanCorners[k2];
+        handle.style.left = `${(p1.x + p2.x) / 2}%`;
+        handle.style.top = `${(p1.y + p2.y) / 2}%`;
+      });
       const order = ['tl', 'tr', 'br', 'bl'];
-      scanPolygonEl.setAttribute('points', order.map((k) => `${scanCorners[k].x},${scanCorners[k].y}`).join(' '));
+      const points = order.map((k) => `${scanCorners[k].x},${scanCorners[k].y}`).join(' ');
+      scanPolygonEl.setAttribute('points', points);
+      scanPolygonMaskEl.setAttribute('points', points);
     }
 
+    // Corner handles: free-drag that one point.
     let activeHandle = null;
     cornerHandles.forEach((handle) => {
       handle.addEventListener('pointerdown', (e) => {
@@ -901,13 +1015,42 @@
       });
       handle.addEventListener('pointermove', (e) => {
         if (activeHandle !== handle) return;
-        const rect = scanStageEl.getBoundingClientRect();
-        const x = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100));
-        const y = Math.min(100, Math.max(0, ((e.clientY - rect.top) / rect.height) * 100));
+        const rect = scanStackEl.getBoundingClientRect();
+        const x = snapToImageEdge(((e.clientX - rect.left) / rect.width) * 100);
+        const y = snapToImageEdge(((e.clientY - rect.top) / rect.height) * 100);
         scanCorners[handle.dataset.corner] = { x, y };
         updateScanOverlay();
       });
       handle.addEventListener('pointerup', () => { activeHandle = null; });
+      handle.addEventListener('pointercancel', () => { activeHandle = null; });
+    });
+
+    // Edge (midpoint) handles: translate both of that side's corners by the
+    // same amount, nudging the whole edge in parallel — finer, steadier
+    // control than dragging a corner when only one side needs adjusting.
+    let activeEdge = null;
+    let edgeDragStart = null;
+    let edgeDragCorners = null;
+    edgeHandles.forEach((handle) => {
+      handle.addEventListener('pointerdown', (e) => {
+        activeEdge = handle;
+        handle.setPointerCapture(e.pointerId);
+        edgeDragStart = { x: e.clientX, y: e.clientY };
+        const [k1, k2] = EDGE_CORNERS[handle.dataset.edge];
+        edgeDragCorners = { k1, k2, c1: { ...scanCorners[k1] }, c2: { ...scanCorners[k2] } };
+      });
+      handle.addEventListener('pointermove', (e) => {
+        if (activeEdge !== handle) return;
+        const rect = scanStackEl.getBoundingClientRect();
+        const dxPct = ((e.clientX - edgeDragStart.x) / rect.width) * 100;
+        const dyPct = ((e.clientY - edgeDragStart.y) / rect.height) * 100;
+        const { k1, k2, c1, c2 } = edgeDragCorners;
+        scanCorners[k1] = { x: snapToImageEdge(c1.x + dxPct), y: snapToImageEdge(c1.y + dyPct) };
+        scanCorners[k2] = { x: snapToImageEdge(c2.x + dxPct), y: snapToImageEdge(c2.y + dyPct) };
+        updateScanOverlay();
+      });
+      handle.addEventListener('pointerup', () => { activeEdge = null; });
+      handle.addEventListener('pointercancel', () => { activeEdge = null; });
     });
 
     function setScanGrayscale(on) {
@@ -1040,18 +1183,19 @@
         setScanGrayscale(false);
         scanProgressEl.textContent = progress ? `Photo ${progress.current} of ${progress.total}` : '';
         scanProcessingEl.style.display = 'none';
-        scanEditorEl.style.display = 'block';
+        scanEditorEl.classList.add('open');
 
         // Hide the handles/outline until auto-detection finishes (needs the
         // image's natural size), so the previous photo's quad doesn't flash
         // up first.
         scanCorners = null;
         scanPolygonEl.setAttribute('points', '');
-        cornerHandles.forEach((h) => { h.style.visibility = 'hidden'; });
+        scanPolygonMaskEl.setAttribute('points', '');
+        allScanHandles.forEach((h) => { h.style.visibility = 'hidden'; });
 
         scanImageEl.onload = () => {
           scanCorners = autoDetectCorners(scanImageEl) || { ...DEFAULT_SCAN_CORNERS };
-          cornerHandles.forEach((h) => { h.style.visibility = ''; });
+          allScanHandles.forEach((h) => { h.style.visibility = ''; });
           updateScanOverlay();
         };
         scanImageEl.src = scanSourceUrl;
@@ -1059,7 +1203,7 @@
     }
 
     function closeScanEditor() {
-      scanEditorEl.style.display = 'none';
+      scanEditorEl.classList.remove('open');
       if (scanSourceUrl) URL.revokeObjectURL(scanSourceUrl);
       scanSourceUrl = null;
       scanSourceFile = null;
