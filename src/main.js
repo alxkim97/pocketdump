@@ -262,12 +262,10 @@ async function createWindow() {
   }
   mainWindow.setResizable(false);
 
-  // Skip showing the window when launched by "Start with Windows" — avoids
-  // a window flashing on screen just to immediately disappear, and skips
-  // the paint/compositing work entirely on a background boot-time launch.
-  if (!app.getLoginItemSettings().wasOpenedAtLogin) {
-    mainWindow.show();
-  }
+  // Always start hidden in the tray — whether launched by "Start with
+  // Windows" or opened by hand — instead of popping the window on top of
+  // whatever the user is doing. Open it from the tray icon when it's
+  // actually wanted.
 
   startMdns();
 
