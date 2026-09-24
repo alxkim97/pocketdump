@@ -62,9 +62,46 @@ function resolveSafePath(base, relPath) {
   return target;
 }
 
-function startServer({ port, httpsPort, certOptions, appVersion, getDestinationFolder, getSourceFolder, onUpload }) {
+function isPrivateIPv4(host) {
+  return /^10\./.test(host) || /^192\.168\./.test(host) || /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
+// Only another PocketDump page may call this PC from a different origin —
+// i.e. the phone page served by a different PocketDump PC, reached as
+// pocketdump.local or a LAN IP on the PocketDump ports. Any other website
+// open on the phone still can't read this PC's shared folder.
+function isPocketDumpOrigin(origin, ports) {
+  let url;
+  try {
+    url = new URL(origin);
+  } catch {
+    return false;
+  }
+  if (!ports.includes(url.port)) return false;
+  return url.hostname === 'pocketdump.local' || isPrivateIPv4(url.hostname);
+}
+
+function startServer({ port, httpsPort, certOptions, appVersion, getDestinationFolder, getSourceFolder, getPcInfo, getPeers, onUpload }) {
   const app = express();
   const upload = multer({ storage: multer.memoryStorage() });
+  const pocketDumpPorts = [String(port), String(httpsPort)];
+
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && isPocketDumpOrigin(origin, pocketDumpPorts)) {
+      res.set('Access-Control-Allow-Origin', origin);
+      res.set('Vary', 'Origin');
+      if (req.method === 'OPTIONS') {
+        res.set('Access-Control-Allow-Methods', 'GET, POST');
+        res.set('Access-Control-Allow-Headers', req.headers['access-control-request-headers'] || '');
+        // Chromium-based browsers ask this before a public-looking page may
+        // reach a LAN address; Safari ignores it.
+        res.set('Access-Control-Allow-Private-Network', 'true');
+        return res.sendStatus(204);
+      }
+    }
+    next();
+  });
 
   app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'mobile', 'index.html'));
@@ -74,6 +111,18 @@ function startServer({ port, httpsPort, certOptions, appVersion, getDestinationF
   // without hardcoding it in two places.
   app.get('/config', (req, res) => {
     res.json({ port, httpsPort: certOptions ? httpsPort : null, version: appVersion || null });
+  });
+
+  // Who this PC is — its Windows name and the nickname set in the PC app.
+  // The phone asks every PC directly, so a nickname change shows up on the
+  // next page load without waiting on the network announcements.
+  app.get('/whoami', (req, res) => {
+    res.json({ ...getPcInfo(), version: appVersion || null });
+  });
+
+  // Every PocketDump PC this one knows about on the network, itself first.
+  app.get('/peers', (req, res) => {
+    res.json({ peers: getPeers() });
   });
 
   // Serves the self-signed CA cert for the phone to download and install as

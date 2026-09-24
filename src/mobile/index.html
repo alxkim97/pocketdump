@@ -35,6 +35,41 @@
     h1 { margin: 0 0 4px; }
     p { color: var(--muted); font-size: 14px; }
 
+    #pc-picker { margin-top: 12px; }
+    #pc-picker-label { margin: 0 0 6px; font-size: 13px; }
+    #pc-list {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    .pc-btn {
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 8px 14px;
+      min-width: 120px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .pc-btn .pc-hostname {
+      display: block;
+      margin-top: 2px;
+      font-size: 11px;
+      font-weight: normal;
+      color: var(--muted);
+    }
+    .pc-btn.selected {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .pc-btn.selected .pc-hostname { color: rgba(255, 255, 255, 0.85); }
+    .pc-btn:disabled { opacity: 0.5; cursor: default; }
+    .pc-btn.selected:disabled { opacity: 1; }
+
     .tabs {
       display: flex;
       margin: 20px 0;
@@ -430,6 +465,10 @@
 <body>
   <h1>PocketDump</h1>
   <p id="app-version"></p>
+  <div id="pc-picker" style="display:none">
+    <p id="pc-picker-label"></p>
+    <div id="pc-list"></div>
+  </div>
   <p id="sync-info" style="display:none"></p>
 
   <div class="tabs">
@@ -576,6 +615,140 @@
       inAppWarningEl.style.display = 'block';
     }
 
+    // --- Which PC to talk to ---
+    // Every request goes through apiUrl(), so switching PCs is just a new
+    // base: '' means the PC that served this page, otherwise another
+    // PocketDump PC on the same network, reached directly by its IP.
+    let apiBase = '';
+    let targetHost = location.hostname;
+    let currentPcId = null;
+    let isUploading = false;
+    let pcs = [];
+    const TARGET_PC_KEY = 'pocketdump-target-pc';
+    const pcPickerEl = document.getElementById('pc-picker');
+    const pcPickerLabelEl = document.getElementById('pc-picker-label');
+    const pcListEl = document.getElementById('pc-list');
+
+    function apiUrl(path) {
+      return apiBase + path;
+    }
+
+    function readSavedPcId() {
+      try { return localStorage.getItem(TARGET_PC_KEY); } catch { return null; }
+    }
+
+    function savePcId(id) {
+      try { localStorage.setItem(TARGET_PC_KEY, id); } catch {}
+    }
+
+    async function fetchJson(url, timeoutMs) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        const res = await fetch(url, { signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return await res.json();
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function renderPcPicker() {
+      if (pcs.length === 0) {
+        pcPickerEl.style.display = 'none';
+        return;
+      }
+      pcPickerLabelEl.textContent = pcs.length > 1 ? 'Choose PC' : 'Connected to';
+      pcListEl.innerHTML = '';
+      pcs.forEach((pc) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'pc-btn' + (pc.id === currentPcId ? ' selected' : '');
+        btn.disabled = pcs.length === 1 || isUploading;
+        btn.textContent = pc.nickname || pc.hostname;
+        // Windows name always visible under a nickname, so it's clear
+        // which machine a nickname belongs to.
+        if (pc.nickname) {
+          const hostEl = document.createElement('span');
+          hostEl.className = 'pc-hostname';
+          hostEl.textContent = pc.hostname;
+          btn.appendChild(hostEl);
+        }
+        btn.addEventListener('click', () => {
+          savePcId(pc.id);
+          if (pc.id !== currentPcId) switchToPc(pc);
+        });
+        pcListEl.appendChild(btn);
+      });
+      pcPickerEl.style.display = 'block';
+    }
+
+    function switchToPc(pc) {
+      apiBase = pc.base;
+      targetHost = pc.host;
+      currentPcId = pc.id;
+      renderPcPicker();
+      knownSignatures = new Set();
+      syncInfoEl.style.display = 'none';
+      loadSyncInfo();
+      loadConfig();
+      browseLoaded = false;
+      fileListEl.innerHTML = '';
+      if (getPanel.classList.contains('active')) {
+        browseLoaded = true;
+        loadBrowse('');
+      }
+    }
+
+    // Asks the PC that served this page which PocketDump PCs it knows of,
+    // then checks each one directly — that both drops PCs that have since
+    // gone offline and picks up each PC's current nickname.
+    async function discoverPcs() {
+      // The live camera page is opened on one specific PC over HTTPS and
+      // always sends to that PC.
+      if (location.protocol === 'https:') return;
+      let peers;
+      try {
+        peers = (await fetchJson('/peers', 4000)).peers;
+      } catch {
+        return; // Older PocketDump without /peers — stay on this PC.
+      }
+      const found = await Promise.all(peers.map(async (peer) => {
+        const base = peer.self ? '' : `http://${peer.address}:${peer.port}`;
+        try {
+          const info = await fetchJson(`${base}/whoami`, 3000);
+          return { ...info, base, host: peer.self ? location.hostname : peer.address, self: peer.self };
+        } catch {
+          return null;
+        }
+      }));
+      const byId = new Map();
+      found.filter(Boolean).forEach((pc) => {
+        if (!byId.has(pc.id) || pc.self) byId.set(pc.id, pc);
+      });
+      pcs = Array.from(byId.values())
+        .sort((a, b) => (a.nickname || a.hostname).localeCompare(b.nickname || b.hostname));
+
+      const savedId = readSavedPcId();
+      const want = pcs.find((pc) => pc.id === savedId)
+        || pcs.find((pc) => pc.id === currentPcId)
+        || pcs.find((pc) => pc.self);
+      if (!want) return renderPcPicker();
+      // Never swap PCs underneath a batch that's still sending.
+      if (want.base !== apiBase && !isUploading) {
+        switchToPc(want);
+      } else {
+        if (want.base === apiBase) currentPcId = want.id;
+        renderPcPicker();
+      }
+    }
+
+    // A home-screen web app is often resumed rather than reloaded, so
+    // re-check which PCs are around whenever it comes back into view.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') discoverPcs();
+    });
+
     // --- Tabs ---
     const tabSend = document.getElementById('tab-send');
     const tabCamera = document.getElementById('tab-camera');
@@ -636,8 +809,12 @@
 
     async function loadSyncInfo() {
       try {
-        const res = await fetch('/sync-info');
+        const base = apiBase;
+        const res = await fetch(apiUrl('/sync-info'));
         const data = await res.json();
+        // A slow reply from the previous PC after switching mustn't
+        // overwrite the new PC's info.
+        if (base !== apiBase) return;
         knownSignatures = new Set(data.signatures || []);
         if (data.lastSyncAt) {
           syncInfoEl.textContent = `Last synced ${formatRelativeTime(data.lastSyncAt)} · ${data.count} file${data.count === 1 ? '' : 's'} saved so far`;
@@ -669,14 +846,14 @@
       logEl.prepend(div);
     }
 
-    function uploadOne(file) {
+    function uploadOne(file, base) {
       return new Promise((resolve, reject) => {
         const formData = new FormData();
         formData.append('file', file, file.name);
         formData.append('lastModified', String(file.lastModified));
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', '/upload');
+        xhr.open('POST', `${base}/upload`);
 
         xhr.upload.addEventListener('progress', (e) => {
           if (e.lengthComputable) {
@@ -700,6 +877,20 @@
     }
 
     async function uploadSequentially(files) {
+      // The whole batch goes to the PC chosen when it started; the PC
+      // buttons are locked until it's done.
+      const base = apiBase;
+      isUploading = true;
+      renderPcPicker();
+      try {
+        await uploadBatch(files, base);
+      } finally {
+        isUploading = false;
+        renderPcPicker();
+      }
+    }
+
+    async function uploadBatch(files, base) {
       card.style.display = 'block';
       summaryEl.textContent = '';
       logEl.innerHTML = '';
@@ -722,7 +913,7 @@
         }
 
         try {
-          const result = await uploadOne(file);
+          const result = await uploadOne(file, base);
           if (result.status === 'saved') {
             saved += 1;
             knownSignatures.add(fileSignature(file));
@@ -895,15 +1086,31 @@
     const isHttps = location.protocol === 'https:';
     let liveStream = null;
 
-    fetch('/config').then((res) => res.json()).then(({ httpsPort, port, version }) => {
-      if (httpsPort) {
-        liveCameraLink.href = `https://${location.hostname}:${httpsPort}/`;
-      } else {
-        liveCameraLink.textContent = 'Live camera unavailable (HTTPS not set up on the PC)';
-      }
-      if (port) nativeCameraLink.href = `http://${location.hostname}:${port}/`;
-      if (version) appVersionEl.textContent = `v${version}`;
-    }).catch(() => {});
+    const certLink = document.getElementById('cert-link');
+    const liveCameraLinkText = liveCameraLink.textContent;
+
+    // Certificate and live camera links point at the chosen PC — the live
+    // camera page is served by that PC itself, over its own HTTPS address.
+    function loadConfig() {
+      const base = apiBase;
+      const host = targetHost;
+      certLink.href = apiUrl('/cert');
+      fetch(apiUrl('/config')).then((res) => res.json()).then(({ httpsPort, port, version }) => {
+        if (base !== apiBase) return;
+        if (httpsPort) {
+          liveCameraLink.href = `https://${host}:${httpsPort}/`;
+          liveCameraLink.textContent = liveCameraLinkText;
+        } else {
+          liveCameraLink.removeAttribute('href');
+          liveCameraLink.textContent = 'Live camera unavailable (HTTPS not set up on the PC)';
+        }
+        if (port) nativeCameraLink.href = `http://${location.hostname}:${port}/`;
+        if (version) appVersionEl.textContent = `v${version}`;
+      }).catch(() => {});
+    }
+
+    loadConfig();
+    discoverPcs();
 
     if (isHttps) {
       nativeCaptureEl.style.display = 'none';
@@ -1339,8 +1546,10 @@
       browseStatusEl.textContent = 'Loading…';
       fileListEl.innerHTML = '';
       try {
-        const res = await fetch(`/browse?dir=${encodeURIComponent(dir)}`);
+        const base = apiBase;
+        const res = await fetch(apiUrl(`/browse?dir=${encodeURIComponent(dir)}`));
         const data = await res.json();
+        if (base !== apiBase) return;
         if (data.error) {
           browseStatusEl.textContent = data.error;
           upBtn.style.display = 'none';
@@ -1370,7 +1579,7 @@
           } else {
             const link = document.createElement('a');
             link.className = 'entry-link';
-            link.href = `/file?path=${encodeURIComponent(entry.path)}`;
+            link.href = apiUrl(`/file?path=${encodeURIComponent(entry.path)}`);
             link.textContent = `⬇️ ${entry.name}`;
             const size = document.createElement('span');
             size.className = 'size';

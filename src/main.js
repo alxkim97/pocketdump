@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, screen } = requi
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
+const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { autoUpdater } = require('electron-updater');
 const { Bonjour } = require('bonjour-service');
@@ -14,6 +15,15 @@ const MDNS_HOST = 'pocketdump.local';
 // bonjour-service probes for ~1s before announcing; generous margin for
 // slow or busy networks.
 const MDNS_PROBE_TIMEOUT_MS = 5000;
+// How often a PC that lost the pocketdump.local name checks whether the
+// holder has gone away (and takes the name over if so), and how often every
+// PC re-asks the network which other PocketDump PCs are around.
+const MDNS_TAKEOVER_CHECK_MS = 30_000;
+const PEER_REFRESH_MS = 30_000;
+// Separate service type every PocketDump PC announces under its own unique
+// name, so the phone can list all of them — pocketdump.local itself can only
+// ever point at one.
+const PEER_SERVICE_TYPE = 'pocketdump';
 let mainWindow;
 let tray = null;
 let isQuitting = false;
@@ -24,6 +34,12 @@ let serverInstance = null;
 let bonjourInstance = null;
 let mdnsAvailable = false;
 let mdnsProbeTimer = null;
+let mdnsTakeoverTimer = null;
+let mdnsTakeoverChecking = false;
+let peerBrowser = null;
+let peerRefreshTimer = null;
+// Other PocketDump PCs seen on the network, keyed by their pcId.
+const peers = new Map();
 let currentAddress = null;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
@@ -38,6 +54,24 @@ function loadSettings() {
 
 function saveSettings(settings) {
   fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings), 'utf8');
+}
+
+// Stable random id for this PC, so the phone can remember which PC it last
+// picked even if that PC's IP address changes.
+function getPcId() {
+  const settings = loadSettings();
+  if (settings.pcId) return settings.pcId;
+  const pcId = crypto.randomUUID();
+  saveSettings({ ...settings, pcId });
+  return pcId;
+}
+
+function getPcInfo() {
+  return {
+    id: getPcId(),
+    hostname: os.hostname(),
+    nickname: loadSettings().nickname || ''
+  };
 }
 
 // Auto-update via electron-updater + GitHub Releases. A manual check from
@@ -163,33 +197,132 @@ function startMdns() {
     bonjourInstance = new Bonjour({}, (err) => {
       console.error('mDNS error:', err);
     });
-    const service = bonjourInstance.publish({ name: 'PocketDump', type: 'http', port: PORT, host: MDNS_HOST });
     mdnsAvailable = true;
-    // If another device (or a second copy of PocketDump) already answers to
-    // this name, bonjour-service just logs and gives up — 'up' never fires
-    // and pocketdump.local would reach that other device or nothing. Treat a
-    // missing 'up' as a conflict and stop offering the address.
-    mdnsProbeTimer = setTimeout(onMdnsUnavailable, MDNS_PROBE_TIMEOUT_MS);
-    service.once('up', () => clearTimeout(mdnsProbeTimer));
+    publishMdnsName();
+    mdnsTakeoverTimer = setInterval(checkMdnsTakeover, MDNS_TAKEOVER_CHECK_MS);
+    startPeerDiscovery();
   } catch (err) {
     console.error('Could not start mDNS — pocketdump.local will be unavailable:', err);
     mdnsAvailable = false;
   }
 }
 
+function publishMdnsName() {
+  const service = bonjourInstance.publish({ name: 'PocketDump', type: 'http', port: PORT, host: MDNS_HOST });
+  // If another device (or a second copy of PocketDump) already answers to
+  // this name, bonjour-service just logs and gives up — 'up' never fires
+  // and pocketdump.local would reach that other device or nothing. Treat a
+  // missing 'up' as a conflict and stop offering the address.
+  mdnsProbeTimer = setTimeout(onMdnsUnavailable, MDNS_PROBE_TIMEOUT_MS);
+  service.once('up', () => {
+    clearTimeout(mdnsProbeTimer);
+    if (!mdnsAvailable) onMdnsAvailable();
+  });
+}
+
+function refreshServerInfo(address) {
+  // Nothing sent to the window yet — startup reads mdnsAvailable directly.
+  if (!currentAddress || !mainWindow || mainWindow.isDestroyed()) return;
+  sendServerInfo(address).catch((err) => console.error('Could not refresh server info:', err));
+}
+
 function onMdnsUnavailable() {
   console.error(`mDNS: ${MDNS_HOST} is already in use on this network — hiding it from the address list.`);
   mdnsAvailable = false;
-  // Nothing sent to the window yet — startup reads mdnsAvailable directly.
-  if (!currentAddress || !mainWindow || mainWindow.isDestroyed()) return;
-  const address = currentAddress === 'mdns'
-    ? pickBestCandidate(listIPv4Candidates()).address
-    : currentAddress;
-  sendServerInfo(address).catch((err) => console.error('Could not refresh server info:', err));
+  refreshServerInfo(currentAddress === 'mdns' ? pickBestCandidate(listIPv4Candidates()).address : currentAddress);
+}
+
+function onMdnsAvailable() {
+  console.log(`mDNS: took over ${MDNS_HOST}.`);
+  mdnsAvailable = true;
+  refreshServerInfo(currentAddress);
+}
+
+// Asks the network who currently answers to pocketdump.local. Our own
+// failed publish has already been torn down, so any answer is another PC.
+function isMdnsNameTaken(timeoutMs) {
+  return new Promise((resolve) => {
+    const mdns = bonjourInstance.server.mdns;
+    const onResponse = (packet) => {
+      const answered = packet.answers.concat(packet.additionals)
+        .some((rr) => rr.type === 'A' && String(rr.name).toLowerCase() === MDNS_HOST);
+      if (answered) done(true);
+    };
+    const done = (taken) => {
+      clearTimeout(timer);
+      mdns.removeListener('response', onResponse);
+      resolve(taken);
+    };
+    const timer = setTimeout(() => done(false), timeoutMs);
+    mdns.on('response', onResponse);
+    mdns.query({ questions: [{ name: MDNS_HOST, type: 'A' }] });
+  });
+}
+
+// When the PC holding pocketdump.local quits, another PocketDump PC on the
+// same network takes the name over, so the phone's single home-screen link
+// keeps working. Checks with a plain query first rather than re-publishing
+// blindly, which would log a conflict every time the holder is still there.
+async function checkMdnsTakeover() {
+  if (!bonjourInstance || mdnsAvailable || mdnsTakeoverChecking) return;
+  mdnsTakeoverChecking = true;
+  try {
+    if (!(await isMdnsNameTaken(2000)) && bonjourInstance && !mdnsAvailable) publishMdnsName();
+  } finally {
+    mdnsTakeoverChecking = false;
+  }
+}
+
+// Every PC announces itself under its own unique name and listens for the
+// others. The phone gets this list from whichever PC it's connected to via
+// /peers, then asks each PC directly for its current name and nickname.
+function startPeerDiscovery() {
+  const pcId = getPcId();
+  bonjourInstance.publish({
+    name: `PocketDump-${pcId.slice(0, 8)}`,
+    type: PEER_SERVICE_TYPE,
+    port: PORT,
+    txt: { id: pcId }
+  });
+
+  peerBrowser = bonjourInstance.find({ type: PEER_SERVICE_TYPE });
+  const onPeer = (service) => {
+    const id = service.txt && service.txt.id;
+    if (!id || id === pcId) return;
+    const addresses = [service.referer && service.referer.address, ...(service.addresses || [])]
+      .filter((a) => a && /^\d+\.\d+\.\d+\.\d+$/.test(a));
+    if (addresses.length === 0) return;
+    peers.set(id, { id, address: addresses[0], port: service.port || PORT, fqdn: service.fqdn });
+  };
+  peerBrowser.on('up', onPeer);
+  peerBrowser.on('srv-update', onPeer);
+  peerBrowser.on('txt-update', onPeer);
+  peerBrowser.on('down', (service) => {
+    for (const [id, peer] of peers) {
+      if (peer.fqdn === service.fqdn) peers.delete(id);
+    }
+  });
+  // The browser only hears announcements as they happen; re-asking now and
+  // then catches PCs whose announcement was missed.
+  peerRefreshTimer = setInterval(() => peerBrowser && peerBrowser.update(), PEER_REFRESH_MS);
+}
+
+// This PC first, then every other PocketDump PC seen on the network. Entries
+// can be stale (a PC that crashed without saying goodbye) — the phone checks
+// each one is actually reachable before listing it.
+function getPeers() {
+  const self = { id: getPcId(), address: pickBestCandidate(listIPv4Candidates()).address, port: PORT, self: true };
+  return [self, ...Array.from(peers.values(), ({ id, address, port }) => ({ id, address, port, self: false }))];
 }
 
 function stopMdns() {
   clearTimeout(mdnsProbeTimer);
+  clearInterval(mdnsTakeoverTimer);
+  clearInterval(peerRefreshTimer);
+  if (peerBrowser) {
+    peerBrowser.stop();
+    peerBrowser = null;
+  }
   if (!bonjourInstance) return;
   // Grab a stable reference before clearing the module-level one — the
   // unpublishAll callback fires asynchronously, after bonjourInstance has
@@ -319,6 +452,8 @@ async function createWindow() {
     appVersion: app.getVersion(),
     getDestinationFolder: () => destinationFolder,
     getSourceFolder: () => sourceFolder,
+    getPcInfo,
+    getPeers,
     onUpload: (info) => mainWindow.webContents.send('upload-event', info)
   });
 
@@ -369,6 +504,15 @@ ipcMain.handle('rebuild-index', () => {
   }
   const count = rebuildIndex(destinationFolder);
   return { count };
+});
+
+ipcMain.handle('get-pc-info', () => getPcInfo());
+
+// Shown on every phone next to this PC's Windows name. Blank clears it.
+ipcMain.handle('set-nickname', (_event, nickname) => {
+  const clean = String(nickname || '').trim().slice(0, 40);
+  saveSettings({ ...loadSettings(), nickname: clean });
+  return getPcInfo();
 });
 
 ipcMain.handle('get-app-info', () => ({

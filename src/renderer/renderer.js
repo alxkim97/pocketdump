@@ -15,6 +15,28 @@ const rebuildBtn = document.getElementById('rebuild-index');
 const rebuildStatusEl = document.getElementById('rebuild-status');
 const footerTextEl = document.getElementById('app-footer-text');
 const checkUpdatesBtn = document.getElementById('check-updates-btn');
+const pcHostnameEl = document.getElementById('pc-hostname');
+const nicknameInputEl = document.getElementById('nickname-input');
+const saveNicknameBtn = document.getElementById('save-nickname');
+const nicknameStatusEl = document.getElementById('nickname-status');
+
+window.pocketdump.getPcInfo().then(({ hostname, nickname }) => {
+  pcHostnameEl.textContent = hostname;
+  nicknameInputEl.value = nickname;
+});
+
+async function saveNickname() {
+  const { nickname } = await window.pocketdump.setNickname(nicknameInputEl.value);
+  nicknameInputEl.value = nickname;
+  nicknameStatusEl.textContent = nickname
+    ? `Saved — your iPhone will show "${nickname}" next time it opens PocketDump.`
+    : 'Nickname cleared — your iPhone will show the Windows name.';
+}
+
+saveNicknameBtn.addEventListener('click', saveNickname);
+nicknameInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') saveNickname();
+});
 
 function showFolder(folder) {
   if (folder) {

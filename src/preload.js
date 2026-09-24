@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('pocketdump', {
   openSourceFolder: () => ipcRenderer.invoke('open-source-folder'),
   selectNetwork: (address) => ipcRenderer.invoke('select-network', address),
   getAppInfo: () => ipcRenderer.invoke('get-app-info'),
+  getPcInfo: () => ipcRenderer.invoke('get-pc-info'),
+  setNickname: (nickname) => ipcRenderer.invoke('set-nickname', nickname),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   rebuildIndex: () => ipcRenderer.invoke('rebuild-index'),
   onServerInfo: (callback) => ipcRenderer.on('server-info', (_event, info) => callback(info)),

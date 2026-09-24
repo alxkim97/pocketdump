@@ -27,6 +27,17 @@
   </section>
 
   <section class="card">
+    <h2>💻 This PC</h2>
+    <p class="muted">Windows name: <strong id="pc-hostname"></strong></p>
+    <label for="nickname-input" class="muted">Nickname shown on your iPhone</label>
+    <div class="nickname-row">
+      <input id="nickname-input" type="text" maxlength="40" placeholder="e.g. Office" />
+      <button id="save-nickname" type="button">Save</button>
+    </div>
+    <p id="nickname-status" class="muted"></p>
+  </section>
+
+  <section class="card">
     <h2>📥 Destination folder</h2>
     <p class="muted">Files from your iPhone land here, sorted by date.</p>
     <button id="choose-folder">Choose folder…</button>

@@ -175,6 +175,30 @@ label[for="network-select"] {
   width: 100%;
   transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
+label[for="nickname-input"] {
+  display: block;
+  margin-top: 8px;
+}
+.nickname-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+#nickname-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+}
+#nickname-status:not(:empty) {
+  margin-top: 6px;
+}
 .status-line {
   display: flex;
   align-items: center;
