@@ -1,0 +1,26 @@
+diff --git a/node_modules/app-builder-lib/out/publish/PublishManager.js b/node_modules/app-builder-lib/out/publish/PublishManager.js
+index 6e8918f..b69ae85 100644
+--- a/node_modules/app-builder-lib/out/publish/PublishManager.js
++++ b/node_modules/app-builder-lib/out/publish/PublishManager.js
+@@ -168,11 +168,18 @@ class PublishManager {
+         const providerCacheKey = (0, builder_util_1.safeStringifyJson)(publishConfig);
+         let publisher = this.nameToPublisher.get(providerCacheKey);
+         if (publisher == null) {
+-            publisher = await createPublisher(this, appInfo.version, publishConfig, this.publishOptions, this.packager);
++            // Cache the promise, not the resolved publisher: artifacts are scheduled
++            // concurrently, and caching only after the await let two uploads each
++            // create a publisher and race to create the same GitHub release (422).
++            publisher = createPublisher(this, appInfo.version, publishConfig, this.publishOptions, this.packager).then(it => {
++                if (it != null) {
++                    builder_util_1.log.info({ publisher: it.toString() }, "publishing");
++                }
++                return it;
++            });
+             this.nameToPublisher.set(providerCacheKey, publisher);
+-            builder_util_1.log.info({ publisher: publisher.toString() }, "publishing");
+         }
+-        return publisher;
++        return await publisher;
+     }
+     // noinspection JSUnusedGlobalSymbols
+     cancelTasks() {

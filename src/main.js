@@ -11,6 +11,9 @@ const { getOrCreateCert } = require('./cert');
 const PORT = 8989;
 const HTTPS_PORT = 8990;
 const MDNS_HOST = 'pocketdump.local';
+// bonjour-service probes for ~1s before announcing; generous margin for
+// slow or busy networks.
+const MDNS_PROBE_TIMEOUT_MS = 5000;
 let mainWindow;
 let tray = null;
 let isQuitting = false;
@@ -20,6 +23,8 @@ let sourceFolder = null;
 let serverInstance = null;
 let bonjourInstance = null;
 let mdnsAvailable = false;
+let mdnsProbeTimer = null;
+let currentAddress = null;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 
@@ -142,6 +147,7 @@ async function buildServerInfo(address) {
 }
 
 async function sendServerInfo(address) {
+  currentAddress = address;
   const candidates = listIPv4Candidates();
   // Offered first, ahead of specific IPs, when mDNS is up — this is the
   // address that keeps working across networks/PCs without a fresh QR scan.
@@ -157,15 +163,33 @@ function startMdns() {
     bonjourInstance = new Bonjour({}, (err) => {
       console.error('mDNS error:', err);
     });
-    bonjourInstance.publish({ name: 'PocketDump', type: 'http', port: PORT, host: MDNS_HOST });
+    const service = bonjourInstance.publish({ name: 'PocketDump', type: 'http', port: PORT, host: MDNS_HOST });
     mdnsAvailable = true;
+    // If another device (or a second copy of PocketDump) already answers to
+    // this name, bonjour-service just logs and gives up — 'up' never fires
+    // and pocketdump.local would reach that other device or nothing. Treat a
+    // missing 'up' as a conflict and stop offering the address.
+    mdnsProbeTimer = setTimeout(onMdnsUnavailable, MDNS_PROBE_TIMEOUT_MS);
+    service.once('up', () => clearTimeout(mdnsProbeTimer));
   } catch (err) {
     console.error('Could not start mDNS — pocketdump.local will be unavailable:', err);
     mdnsAvailable = false;
   }
 }
 
+function onMdnsUnavailable() {
+  console.error(`mDNS: ${MDNS_HOST} is already in use on this network — hiding it from the address list.`);
+  mdnsAvailable = false;
+  // Nothing sent to the window yet — startup reads mdnsAvailable directly.
+  if (!currentAddress || !mainWindow || mainWindow.isDestroyed()) return;
+  const address = currentAddress === 'mdns'
+    ? pickBestCandidate(listIPv4Candidates()).address
+    : currentAddress;
+  sendServerInfo(address).catch((err) => console.error('Could not refresh server info:', err));
+}
+
 function stopMdns() {
+  clearTimeout(mdnsProbeTimer);
   if (!bonjourInstance) return;
   // Grab a stable reference before clearing the module-level one — the
   // unpublishAll callback fires asynchronously, after bonjourInstance has
