@@ -13,7 +13,7 @@ const META_FILE = 'https-cert-meta.json';
 // The cert is cached in userData and only regenerated when the addresses it
 // needs to cover change (e.g. a new WiFi network), so the phone doesn't have
 // to re-trust it on every launch.
-function getOrCreateCert(certDir, addresses) {
+async function getOrCreateCert(certDir, addresses) {
   const keyPath = path.join(certDir, KEY_FILE);
   const certPath = path.join(certDir, CERT_FILE);
   const metaPath = path.join(certDir, META_FILE);
@@ -38,8 +38,12 @@ function getOrCreateCert(certDir, addresses) {
     /^\d+\.\d+\.\d+\.\d+$/.test(addr) ? { type: 7, ip: addr } : { type: 2, value: addr }
   );
 
-  const pems = selfsigned.generate([{ name: 'commonName', value: 'PocketDump' }], {
-    days: 3650,
+  const notBeforeDate = new Date();
+  const notAfterDate = new Date(notBeforeDate);
+  notAfterDate.setFullYear(notAfterDate.getFullYear() + 10);
+  const pems = await selfsigned.generate([{ name: 'commonName', value: 'PocketDump' }], {
+    notBeforeDate,
+    notAfterDate,
     keySize: 2048,
     algorithm: 'sha256', // iOS rejects SHA-1-signed server certs on modern versions
     extensions: [{ name: 'subjectAltName', altNames }]

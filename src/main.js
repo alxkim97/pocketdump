@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, screen } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, Tray, screen, Notification, clipboard, nativeImage } = require('electron');
 const path = require('path');
 const os = require('os');
 const fs = require('fs');
@@ -6,8 +6,9 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { autoUpdater } = require('electron-updater');
 const { Bonjour } = require('bonjour-service');
-const { startServer, stopServer, rebuildIndex } = require('./server');
+const { startServer, stopServer, rebuildIndex, cleanupTemp, flushManifests } = require('./server');
 const { getOrCreateCert } = require('./cert');
+const { writeFileAtomic } = require('./fsutil');
 
 const PORT = 8989;
 const HTTPS_PORT = 8990;
@@ -43,17 +44,192 @@ const peers = new Map();
 let currentAddress = null;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
+const MAX_TEXTS = 50;
+const THUMBNAIL_CACHE_SIZE = 300;
+// Uploads arriving within this long of each other count as one batch for
+// the "files received" notification.
+const BATCH_NOTIFY_DELAY_MS = 4000;
+
+// Read once and kept in memory — the server consults settings (pairing
+// tokens, outbox) on every request.
+let settingsCache = null;
 
 function loadSettings() {
-  try {
-    return JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
-  } catch {
-    return {};
+  if (!settingsCache) {
+    try {
+      settingsCache = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8'));
+    } catch {
+      settingsCache = {};
+    }
   }
+  return settingsCache;
 }
 
 function saveSettings(settings) {
-  fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings), 'utf8');
+  settingsCache = settings;
+  writeFileAtomic(SETTINGS_PATH, JSON.stringify(settings));
+}
+
+function sendToWindow(channel, payload) {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send(channel, payload);
+}
+
+// --- Pairing ---
+// The PC shows a 4-digit PIN (also baked into its QR code). A phone that
+// enters it gets a random token; only a hash of it is stored here.
+function newPin() {
+  return String(crypto.randomInt(0, 10_000)).padStart(4, '0');
+}
+
+function getPairing() {
+  const settings = loadSettings();
+  if (settings.pin && Array.isArray(settings.devices)) return { pin: settings.pin, devices: settings.devices };
+  const pairing = { pin: settings.pin || newPin(), devices: settings.devices || [] };
+  saveSettings({ ...settings, ...pairing });
+  return pairing;
+}
+
+function hashToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function isValidToken(token) {
+  const tokenHash = hashToken(token);
+  return getPairing().devices.some((d) => d.tokenHash === tokenHash);
+}
+
+function pairDevice(pin, deviceName) {
+  const pairing = getPairing();
+  const expected = Buffer.from(pairing.pin);
+  const given = Buffer.from(pin);
+  if (given.length !== expected.length || !crypto.timingSafeEqual(given, expected)) return null;
+  const token = crypto.randomBytes(24).toString('base64url');
+  const devices = [...pairing.devices, { tokenHash: hashToken(token), name: deviceName || 'iPhone', pairedAt: Date.now() }];
+  saveSettings({ ...loadSettings(), devices });
+  sendToWindow('pairing-info', getPairingInfo());
+  return token;
+}
+
+function getPairingInfo() {
+  const { pin, devices } = getPairing();
+  return { pin, deviceCount: devices.length };
+}
+
+// --- Send to iPhone (outbox) ---
+function getOutbox() {
+  return (loadSettings().outbox || []).flatMap((item) => {
+    try {
+      const stat = fs.statSync(item.path);
+      return stat.isFile() ? [{ ...item, size: stat.size }] : [];
+    } catch {
+      return []; // Moved or deleted on the PC since it was added.
+    }
+  });
+}
+
+function saveOutbox(outbox) {
+  saveSettings({ ...loadSettings(), outbox });
+  sendToWindow('outbox-updated', getOutbox());
+}
+
+function addToOutbox(filePaths) {
+  const outbox = loadSettings().outbox || [];
+  const known = new Set(outbox.map((item) => item.path));
+  const added = [];
+  for (const filePath of filePaths) {
+    if (!filePath || known.has(filePath)) continue;
+    try {
+      if (!fs.statSync(filePath).isFile()) continue; // folders aren't supported
+    } catch {
+      continue;
+    }
+    known.add(filePath);
+    added.push({ id: crypto.randomUUID(), path: filePath, name: path.basename(filePath), addedAt: Date.now() });
+  }
+  saveOutbox([...added, ...outbox]);
+}
+
+// --- Text & links ---
+function getTexts() {
+  return loadSettings().texts || [];
+}
+
+function addText(text, from) {
+  const entry = { id: crypto.randomUUID(), text, from, at: Date.now() };
+  const texts = [entry, ...getTexts()].slice(0, MAX_TEXTS);
+  saveSettings({ ...loadSettings(), texts });
+  sendToWindow('texts-updated', texts);
+  if (from === 'phone') notifyText(text);
+  return entry;
+}
+
+// --- Thumbnails ---
+// Windows' own shell thumbnails, so HEIC and videos work wherever Explorer
+// can preview them. Cached by path + modified time.
+const thumbnailCache = new Map();
+
+async function getThumbnail(filePath) {
+  let key;
+  try {
+    key = `${filePath}|${fs.statSync(filePath).mtimeMs}`;
+  } catch {
+    return null;
+  }
+  if (thumbnailCache.has(key)) {
+    const cached = thumbnailCache.get(key);
+    thumbnailCache.delete(key);
+    thumbnailCache.set(key, cached);
+    return cached;
+  }
+  let jpeg = null;
+  try {
+    const image = await nativeImage.createThumbnailFromPath(filePath, { width: 240, height: 240 });
+    if (!image.isEmpty()) jpeg = image.toJPEG(75);
+  } catch {
+    // No preview available for this file.
+  }
+  thumbnailCache.set(key, jpeg);
+  if (thumbnailCache.size > THUMBNAIL_CACHE_SIZE) thumbnailCache.delete(thumbnailCache.keys().next().value);
+  return jpeg;
+}
+
+// --- Windows notifications ---
+let batchCounts = { saved: 0, duplicate: 0, lastFolder: null };
+let batchTimer = null;
+
+function showNotification(options, onClick) {
+  if (!Notification.isSupported()) return;
+  const notification = new Notification({ title: 'PocketDump', ...options });
+  if (onClick) notification.on('click', onClick);
+  notification.show();
+}
+
+function noteUploadForNotification(result) {
+  if (result.status === 'saved') {
+    batchCounts.saved += 1;
+    batchCounts.lastFolder = result.folder;
+  } else {
+    batchCounts.duplicate += 1;
+  }
+  clearTimeout(batchTimer);
+  batchTimer = setTimeout(() => {
+    const { saved, duplicate, lastFolder } = batchCounts;
+    batchCounts = { saved: 0, duplicate: 0, lastFolder: null };
+    const parts = [];
+    if (saved) parts.push(`${saved} file${saved === 1 ? '' : 's'} received`);
+    if (duplicate) parts.push(`${duplicate} already on PC`);
+    const folderToOpen = saved && lastFolder ? path.join(destinationFolder, lastFolder) : destinationFolder;
+    showNotification({ body: `${parts.join(', ')}. Click to open the folder.` }, () => {
+      if (folderToOpen) shell.openPath(folderToOpen);
+    });
+  }, BATCH_NOTIFY_DELAY_MS);
+}
+
+function notifyText(text) {
+  const preview = text.length > 120 ? `${text.slice(0, 117)}…` : text;
+  showNotification({ title: 'Text from iPhone', body: `${preview}\nClick to copy.` }, () => {
+    clipboard.writeText(text);
+  });
 }
 
 // Stable random id for this PC, so the phone can remember which PC it last
@@ -173,10 +349,13 @@ function pickBestCandidate(candidates) {
   );
 }
 
+// The QR also carries this PC's id and pairing PIN (after the #, so it's
+// never sent over the network): scanning it pairs the phone with this PC
+// and picks it as the one to send to, with nothing to type.
 async function buildServerInfo(address) {
   const host = address === 'mdns' ? MDNS_HOST : address;
   const url = `http://${host}:${PORT}`;
-  const qrDataUrl = await QRCode.toDataURL(url);
+  const qrDataUrl = await QRCode.toDataURL(`${url}/#pair=${getPcId()}.${getPairing().pin}`);
   return { url, qrDataUrl, address };
 }
 
@@ -186,7 +365,7 @@ async function sendServerInfo(address) {
   // Offered first, ahead of specific IPs, when mDNS is up — this is the
   // address that keeps working across networks/PCs without a fresh QR scan.
   if (mdnsAvailable) {
-    candidates.unshift({ name: `Recommended — works on any network (${MDNS_HOST})`, address: 'mdns' });
+    candidates.unshift({ name: `${MDNS_HOST} — name link (recommended)`, address: 'mdns' });
   }
   const info = await buildServerInfo(address);
   mainWindow.webContents.send('server-info', { ...info, candidates });
@@ -267,6 +446,11 @@ async function checkMdnsTakeover() {
   if (!bonjourInstance || mdnsAvailable || mdnsTakeoverChecking) return;
   mdnsTakeoverChecking = true;
   try {
+    // A random pause first, so two PCs that noticed the holder leave at the
+    // same moment don't both grab the name at once — the later one sees
+    // the earlier one's claim and backs off.
+    await new Promise((resolve) => setTimeout(resolve, Math.random() * 5000));
+    if (!bonjourInstance || mdnsAvailable) return;
     if (!(await isMdnsNameTaken(2000)) && bonjourInstance && !mdnsAvailable) publishMdnsName();
   } finally {
     mdnsTakeoverChecking = false;
@@ -398,6 +582,7 @@ async function createWindow() {
   }
   notifyFolder();
   notifySourceFolder();
+  cleanupTemp(destinationFolder);
 
   // The window's height needs to fit whichever state is currently showing —
   // a returning user with folders already chosen sees two extra "Open
@@ -437,7 +622,7 @@ async function createWindow() {
   try {
     const certAddresses = listIPv4Candidates().map((c) => c.address);
     if (mdnsAvailable) certAddresses.push(MDNS_HOST);
-    certOptions = getOrCreateCert(app.getPath('userData'), certAddresses);
+    certOptions = await getOrCreateCert(app.getPath('userData'), certAddresses);
   } catch (err) {
     console.error('Could not set up HTTPS cert — live camera view will be unavailable:', err);
   }
@@ -454,7 +639,15 @@ async function createWindow() {
     getSourceFolder: () => sourceFolder,
     getPcInfo,
     getPeers,
-    onUpload: (info) => mainWindow.webContents.send('upload-event', info)
+    auth: { isValidToken, pair: pairDevice },
+    getOutbox,
+    getTexts,
+    addText,
+    getThumbnail,
+    onUpload: (info) => {
+      sendToWindow('upload-event', info);
+      noteUploadForNotification(info);
+    }
   });
 
   const candidates = listIPv4Candidates();
@@ -475,6 +668,7 @@ ipcMain.handle('choose-folder', async () => {
   }
   destinationFolder = result.filePaths[0];
   saveSettings({ ...loadSettings(), destinationFolder });
+  cleanupTemp(destinationFolder);
   return destinationFolder;
 });
 
@@ -498,12 +692,60 @@ ipcMain.handle('open-source-folder', () => {
   if (sourceFolder) shell.openPath(sourceFolder);
 });
 
-ipcMain.handle('rebuild-index', () => {
+ipcMain.handle('rebuild-index', async () => {
   if (!destinationFolder) {
     return { error: 'No destination folder selected yet.' };
   }
-  const count = rebuildIndex(destinationFolder);
-  return { count };
+  try {
+    return await rebuildIndex(destinationFolder);
+  } catch (err) {
+    console.error('Rebuild index failed:', err);
+    return { error: `Could not rebuild the index (${err.code || err.message}).` };
+  }
+});
+
+ipcMain.handle('get-pairing-info', () => getPairingInfo());
+
+// New PIN, and every phone paired so far has to pair again.
+ipcMain.handle('reset-pairing', async () => {
+  saveSettings({ ...loadSettings(), pin: newPin(), devices: [] });
+  if (currentAddress) await sendServerInfo(currentAddress);
+  return getPairingInfo();
+});
+
+ipcMain.handle('get-outbox', () => getOutbox());
+
+ipcMain.handle('add-outbox-files', (_event, filePaths) => {
+  addToOutbox(Array.isArray(filePaths) ? filePaths.map(String) : []);
+});
+
+ipcMain.handle('choose-outbox-files', async () => {
+  const result = await dialog.showOpenDialog(mainWindow, { properties: ['openFile', 'multiSelections'] });
+  if (!result.canceled) addToOutbox(result.filePaths);
+});
+
+ipcMain.handle('remove-outbox-item', (_event, id) => {
+  saveOutbox((loadSettings().outbox || []).filter((item) => item.id !== id));
+});
+
+ipcMain.handle('clear-outbox', () => saveOutbox([]));
+
+ipcMain.handle('get-texts', () => getTexts());
+
+ipcMain.handle('send-text', (_event, text) => {
+  const clean = String(text || '').trim().slice(0, 10_000);
+  if (clean) addText(clean, 'pc');
+});
+
+ipcMain.handle('clear-texts', () => {
+  saveSettings({ ...loadSettings(), texts: [] });
+  sendToWindow('texts-updated', []);
+});
+
+ipcMain.handle('copy-text', (_event, text) => clipboard.writeText(String(text || '')));
+
+ipcMain.handle('open-link', (_event, url) => {
+  if (/^https?:\/\//i.test(String(url))) shell.openExternal(String(url));
 });
 
 ipcMain.handle('get-pc-info', () => getPcInfo());
@@ -542,6 +784,9 @@ if (!gotSingleInstanceLock) {
 app.whenReady().then(() => {
   if (!gotSingleInstanceLock) return;
   Menu.setApplicationMenu(null);
+  // Matches the installer's shortcut, so Windows attributes notifications
+  // to PocketDump (not "Electron").
+  app.setAppUserModelId('com.alexkim.pocketdump');
 
   // Default to starting with Windows, but only ever set this automatically
   // on the very first-ever launch — once the user has an explicit
@@ -571,6 +816,9 @@ app.whenReady().then(() => {
 
 app.on('before-quit', () => {
   isQuitting = true;
+  // Also covers quitting to install an update, which may not get as far
+  // as window-all-closed.
+  flushManifests();
 });
 
 app.on('window-all-closed', () => {

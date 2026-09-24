@@ -18,11 +18,12 @@
     <h2>📱 Scan with iPhone</h2>
     <img id="qr" alt="QR code" />
     <p id="server-url" class="muted"></p>
-    <label for="network-select" class="muted">Different network:</label>
-    <select id="network-select"></select>
-    <details class="hint-details">
-      <summary>Wired connection tip</summary>
-      <p class="muted">Turn on Personal Hotspot and plug in the USB cable — the iPhone's USB network will show up in this list (needs Apple Mobile Device Support / iTunes drivers on Windows).</p>
+    <details id="connection-help" class="hint-details">
+      <summary>Having trouble connecting?</summary>
+      <label for="network-select" class="muted">Connect using:</label>
+      <select id="network-select"></select>
+      <p id="network-hint" class="muted"></p>
+      <p class="muted"><strong>Wired:</strong> turn on Personal Hotspot and plug in the USB cable — the iPhone's USB network will show up in this list (needs Apple Mobile Device Support / iTunes drivers on Windows).</p>
     </details>
   </section>
 
@@ -35,6 +36,17 @@
       <button id="save-nickname" type="button">Save</button>
     </div>
     <p id="nickname-status" class="muted"></p>
+    <div class="pairing-row">
+      <div>
+        <p class="muted">Pairing PIN</p>
+        <p id="pairing-pin" class="pairing-pin"></p>
+      </div>
+      <div class="pairing-side">
+        <p id="pairing-count" class="muted"></p>
+        <button id="reset-pairing" class="link" type="button">Unpair all phones</button>
+      </div>
+    </div>
+    <p class="muted">Scanning the QR code pairs your iPhone automatically. Otherwise it asks for this PIN once.</p>
   </section>
 
   <section class="card">
@@ -55,6 +67,27 @@
     <button id="choose-source-folder">Choose folder…</button>
     <p id="source-folder-path" class="muted">No folder shared yet</p>
     <button id="open-source-folder" class="link" style="display:none">📂 Open folder</button>
+  </section>
+
+  <section id="outbox-card" class="card">
+    <h2>📲 Send to iPhone</h2>
+    <p class="muted">Drop files here (or choose them) — they show up under "Get from PC" on your iPhone.</p>
+    <div id="outbox-drop" class="drop-zone">
+      <span>Drop files here</span>
+      <button id="choose-outbox" type="button">Choose files…</button>
+    </div>
+    <ul id="outbox-list" class="item-list"></ul>
+    <button id="clear-outbox" class="link" type="button" style="display:none">Remove all</button>
+  </section>
+
+  <section class="card">
+    <h2>💬 Text &amp; links</h2>
+    <div class="text-send-row">
+      <textarea id="text-input" rows="2" placeholder="Type or paste something to send to your iPhone"></textarea>
+      <button id="send-text" type="button">Send</button>
+    </div>
+    <ul id="text-list" class="item-list"></ul>
+    <button id="clear-texts" class="link" type="button" style="display:none">Clear all</button>
   </section>
 
   <section class="card">

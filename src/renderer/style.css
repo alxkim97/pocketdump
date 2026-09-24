@@ -175,6 +175,12 @@ label[for="network-select"] {
   width: 100%;
   transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
 }
+#network-hint {
+  margin: 6px 0 0;
+}
+#network-hint:empty {
+  display: none;
+}
 label[for="nickname-input"] {
   display: block;
   margin-top: 8px;
@@ -256,4 +262,98 @@ label[for="nickname-input"] {
   font-family: inherit;
   cursor: pointer;
   padding: 0;
+}
+
+.pairing-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.pairing-pin {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.pairing-side {
+  text-align: right;
+}
+
+.drop-zone {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 12px;
+  border: 2px dashed var(--border);
+  border-radius: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+#outbox-card.dragging .drop-zone {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+
+.item-list {
+  list-style: none;
+  padding: 0;
+  margin: 8px 0 0;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 13px;
+}
+.item-list:empty { display: none; }
+.item-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+.item-list .item-main {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+.item-list .item-meta {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  white-space: normal;
+}
+.item-list button {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+}
+.item-list button.plain {
+  background: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.text-send-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+#text-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
 }

@@ -35,40 +35,47 @@
     h1 { margin: 0 0 4px; }
     p { color: var(--muted); font-size: 14px; }
 
-    #pc-picker { margin-top: 12px; }
-    #pc-picker-label { margin: 0 0 6px; font-size: 13px; }
+    /* One quiet line under the title: plain text with a single PC, small
+       outline pills only when there's actually a choice to make. */
+    #pc-picker {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    #pc-picker-label { margin: 0; font-size: 13px; }
     #pc-list {
       display: flex;
       flex-wrap: wrap;
       justify-content: center;
-      gap: 8px;
+      gap: 6px;
     }
     .pc-btn {
       border: 1px solid var(--border);
-      background: var(--card-bg);
-      color: var(--text);
-      border-radius: 10px;
-      padding: 8px 14px;
-      min-width: 120px;
-      font-size: 14px;
-      font-weight: 600;
+      background: none;
+      color: var(--muted);
+      border-radius: 999px;
+      padding: 2px 10px;
+      font-size: 13px;
       cursor: pointer;
     }
-    .pc-btn .pc-hostname {
-      display: block;
-      margin-top: 2px;
-      font-size: 11px;
-      font-weight: normal;
-      color: var(--muted);
-    }
+    .pc-btn .pc-hostname { font-size: 11px; }
     .pc-btn.selected {
-      background: var(--accent);
       border-color: var(--accent);
-      color: #fff;
+      color: var(--text);
+      font-weight: 600;
     }
-    .pc-btn.selected .pc-hostname { color: rgba(255, 255, 255, 0.85); }
+    .pc-btn.only {
+      border: none;
+      padding: 0;
+      color: var(--text);
+      font-weight: 600;
+      cursor: default;
+    }
     .pc-btn:disabled { opacity: 0.5; cursor: default; }
-    .pc-btn.selected:disabled { opacity: 1; }
+    .pc-btn.selected:disabled, .pc-btn.only:disabled { opacity: 1; }
 
     .tabs {
       display: flex;
@@ -83,11 +90,12 @@
       border: none;
       background: none;
       color: var(--muted);
-      font-size: 14px;
+      font-size: 13px;
       font-weight: 600;
-      padding: 10px 8px;
+      padding: 10px 4px;
       border-radius: 8px;
       cursor: pointer;
+      white-space: nowrap;
     }
     .tab-btn.active {
       background: var(--accent);
@@ -96,17 +104,20 @@
     .panel { display: none; text-align: left; }
     .panel.active { display: block; }
 
-    label.picker {
+    .picker {
       display: inline-block;
       margin-top: 16px;
       background: var(--accent);
       color: #fff;
+      border: none;
       border-radius: 10px;
       padding: 14px 28px;
       font-size: 16px;
+      font-family: inherit;
       cursor: pointer;
       text-align: center;
     }
+    .camera-actions .picker { margin-top: 0; }
     input[type="file"] { display: none; }
     #progress-card {
       display: none;
@@ -152,7 +163,7 @@
       color: var(--muted);
       overflow-wrap: anywhere;
     }
-    #file-list {
+    .file-list {
       list-style: none;
       padding: 0;
       margin: 12px 0 0;
@@ -160,11 +171,11 @@
       border-radius: 12px;
       overflow: hidden;
     }
-    #file-list li {
+    .file-list li {
       border-bottom: 1px solid var(--border);
     }
-    #file-list li:last-child { border-bottom: none; }
-    #file-list button.entry-btn {
+    .file-list li:last-child { border-bottom: none; }
+    .file-list button.entry-btn {
       display: block;
       width: 100%;
       border: none;
@@ -175,14 +186,27 @@
       color: var(--text);
       cursor: pointer;
     }
-    #file-list a.entry-link {
-      display: block;
-      padding: 14px 16px;
+    .file-list a.entry-link {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 16px;
+      min-height: 50px;
       font-size: 15px;
       color: var(--text);
       text-decoration: none;
+      overflow-wrap: anywhere;
     }
-    #file-list .size {
+    .file-list .thumb {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      border-radius: 6px;
+      object-fit: cover;
+      background: var(--border);
+    }
+    .file-list .entry-text { min-width: 0; }
+    .file-list .size {
       color: var(--muted);
       font-size: 12px;
       display: block;
@@ -460,6 +484,139 @@
       padding: 16px;
       font-size: 14px;
     }
+
+    label.picker.disabled, button.picker:disabled {
+      opacity: 0.5;
+      pointer-events: none;
+    }
+    #retry-btn {
+      display: none;
+      margin-top: 12px;
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 15px;
+      background: var(--accent);
+      color: #fff;
+      cursor: pointer;
+    }
+
+    #pair-card {
+      display: none;
+      margin-top: 24px;
+      background: var(--card-bg);
+      border-radius: 12px;
+      padding: 20px 16px;
+    }
+    #pair-card h2 { margin: 0 0 6px; font-size: 18px; }
+    #pair-pin {
+      display: block;
+      width: 160px;
+      margin: 16px auto 0;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 28px;
+      letter-spacing: 10px;
+      text-align: center;
+      font-variant-numeric: tabular-nums;
+    }
+    #pair-btn { margin-top: 14px; border: none; }
+    #pair-error { color: #d93025; min-height: 1em; }
+
+    .section-title {
+      margin: 18px 0 0;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    #zip-link {
+      display: none;
+      margin-left: auto;
+      font-size: 13px;
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .copy-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .copy-box code {
+      flex: 1;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      font-size: 12px;
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 6px 8px;
+    }
+    .small-btn {
+      flex-shrink: 0;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    #phone-text-input {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--card-bg);
+      color: var(--text);
+      font-size: 16px; /* 16px+ stops iOS zooming in on focus */
+      font-family: inherit;
+      resize: vertical;
+    }
+    #phone-send-text { display: block; width: 100%; border: none; }
+    #text-status { text-align: center; min-height: 1em; }
+    .text-list {
+      list-style: none;
+      padding: 0;
+      margin: 12px 0 0;
+      background: var(--card-bg);
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .text-list:empty { display: none; }
+    .text-list li {
+      display: flex;
+      gap: 10px;
+      align-items: flex-start;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .text-list li:last-child { border-bottom: none; }
+    .text-list .text-body {
+      flex: 1;
+      min-width: 0;
+      font-size: 15px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .text-list .text-body a { color: var(--accent); }
+    .text-list .text-meta {
+      display: block;
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
   </style>
 </head>
 <body>
@@ -471,16 +628,45 @@
   </div>
   <p id="sync-info" style="display:none"></p>
 
+  <!-- Shown instead of the tabs until this iPhone has paired with the
+       chosen PC (scanning the PC's QR code does it automatically). -->
+  <div id="pair-card">
+    <h2>Pair with <span id="pair-pc-name">your PC</span></h2>
+    <p>Enter the 4-digit PIN shown in the PocketDump window on the PC, under "This PC". You only need to do this once.</p>
+    <input id="pair-pin" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="one-time-code" aria-label="Pairing PIN" />
+    <button id="pair-btn" class="picker" type="button">Pair</button>
+    <p id="pair-error"></p>
+  </div>
+
+  <div id="main-content">
   <div class="tabs">
     <button id="tab-send" class="tab-btn active" type="button">Send to PC</button>
     <button id="tab-camera" class="tab-btn" type="button">Camera</button>
     <button id="tab-get" class="tab-btn" type="button">Get from PC</button>
+    <button id="tab-text" class="tab-btn" type="button">Text</button>
   </div>
 
   <div id="send-panel" class="panel active" style="text-align:center">
     <p>Pick photos &amp; videos to send to your PC.</p>
-    <label class="picker" for="file-input">Choose photos &amp; videos</label>
+    <label id="file-picker-label" class="picker" for="file-input">Choose photos &amp; videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
+
+    <details class="setup-card">
+      <summary>⚡ Send straight from Photos (Share Sheet shortcut)</summary>
+      <p>Set this up once, then in Photos tap Share → PocketDump. Sends the original files (HEIC stays HEIC) without opening this page.</p>
+      <ol>
+        <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, and name the shortcut "PocketDump".</li>
+        <li>Tap the <strong>ⓘ</strong> button, turn on <strong>Show in Share Sheet</strong>, and set it to receive <strong>Images</strong> and <strong>Media</strong>.</li>
+        <li>Add a <strong>Repeat with Each</strong> action, repeating over <strong>Shortcut Input</strong>.</li>
+        <li>Inside the repeat, add <strong>Get Contents of URL</strong>. Paste the address below, set Method to <strong>POST</strong> and Request Body to <strong>Form</strong>, then add a <strong>File</strong> field named <code>file</code> set to <strong>Repeat Item</strong>.</li>
+        <li>Optional: add a <strong>Text</strong> field named <code>lastModified</code> set to Repeat Item's <strong>Creation Date</strong> (Date Format: ISO 8601), so each photo is filed under the day it was taken.</li>
+      </ol>
+      <div class="copy-box">
+        <code id="shortcut-url">Pair with a PC first</code>
+        <button id="copy-shortcut-url" class="small-btn" type="button">Copy</button>
+      </div>
+      <p>This address contains this iPhone's pairing key — don't share it.</p>
+    </details>
   </div>
 
   <div id="camera-panel" class="panel" style="text-align:center">
@@ -573,19 +759,36 @@
     <div id="current-file"></div>
     <div id="bar-track"><div id="bar-fill"></div></div>
     <div id="summary"></div>
+    <button id="retry-btn" type="button"></button>
     <div id="log"></div>
   </div>
 
   <div id="get-panel" class="panel">
-    <p style="text-align:center">Browse the folder your PC is sharing and download files to your iPhone.</p>
+    <div id="outbox-section" style="display:none">
+      <p class="section-title">Sent from PC</p>
+      <ul id="outbox-list" class="file-list"></ul>
+    </div>
+    <p class="section-title">Shared folder</p>
     <div class="browse-toolbar">
       <button id="up-btn" type="button">⬆️ Up</button>
       <span id="breadcrumb"></span>
+      <a id="zip-link" href="#">⬇️ Download all (.zip)</a>
     </div>
     <p id="browse-status" class="muted"></p>
-    <ul id="file-list"></ul>
+    <ul id="file-list" class="file-list"></ul>
     <p class="download-note">Downloads land in Files → Downloads. From there, use Share → Save Video/Image for photos &amp; videos, or Share → Music to add a song to your Music library.</p>
   </div>
+
+  <div id="text-panel" class="panel">
+    <p style="text-align:center">Send text or a link to your PC, or copy what the PC sent here.</p>
+    <textarea id="phone-text-input" rows="3" placeholder="Type or paste here"></textarea>
+    <button id="phone-send-text" class="picker" type="button">Send to PC</button>
+    <p id="text-status"></p>
+    <ul id="phone-text-list" class="text-list"></ul>
+  </div>
+  </div>
+
+  <script src="/nosleep.js"></script>
 
   <script>
     const appVersionEl = document.getElementById('app-version');
@@ -621,16 +824,51 @@
     // PocketDump PC on the same network, reached directly by its IP.
     let apiBase = '';
     let targetHost = location.hostname;
+    let targetPort = location.port || '8989';
     let currentPcId = null;
+    let currentPcName = '';
     let isUploading = false;
     let pcs = [];
+    // From a scanned QR code: { id, pin } of the PC whose screen it was on.
+    let pendingQrPair = null;
     const TARGET_PC_KEY = 'pocketdump-target-pc';
+    const TOKENS_KEY = 'pocketdump-tokens';
     const pcPickerEl = document.getElementById('pc-picker');
     const pcPickerLabelEl = document.getElementById('pc-picker-label');
     const pcListEl = document.getElementById('pc-list');
 
+    // Each PC gives this iPhone its own token when paired; kept per PC id.
+    function readTokens() {
+      try { return JSON.parse(localStorage.getItem(TOKENS_KEY)) || {}; } catch { return {}; }
+    }
+
+    function saveToken(pcId, token) {
+      const tokens = readTokens();
+      if (token) tokens[pcId] = token;
+      else delete tokens[pcId];
+      try { localStorage.setItem(TOKENS_KEY, JSON.stringify(tokens)); } catch {}
+    }
+
+    function currentToken() {
+      return (currentPcId && readTokens()[currentPcId]) || '';
+    }
+
     function apiUrl(path) {
-      return apiBase + path;
+      const token = currentToken();
+      if (!token) return apiBase + path;
+      return `${apiBase}${path}${path.includes('?') ? '&' : '?'}t=${encodeURIComponent(token)}`;
+    }
+
+    // fetch() for anything that needs pairing: a 401 means this iPhone's
+    // token isn't (or is no longer) accepted, so ask for the PIN.
+    async function apiFetch(path, options) {
+      const res = await fetch(apiUrl(path), options);
+      if (res.status === 401) {
+        saveToken(currentPcId, null);
+        showPairing();
+        throw new Error('This iPhone needs to pair with the PC again.');
+      }
+      return res;
     }
 
     function readSavedPcId() {
@@ -658,20 +896,23 @@
         pcPickerEl.style.display = 'none';
         return;
       }
-      pcPickerLabelEl.textContent = pcs.length > 1 ? 'Choose PC' : 'Connected to';
+      pcPickerLabelEl.textContent = pcs.length > 1 ? 'Send to' : 'Connected to';
       pcListEl.innerHTML = '';
+      const displayName = (pc) => pc.nickname || pc.hostname;
       pcs.forEach((pc) => {
         const btn = document.createElement('button');
         btn.type = 'button';
-        btn.className = 'pc-btn' + (pc.id === currentPcId ? ' selected' : '');
+        btn.className = 'pc-btn'
+          + (pcs.length === 1 ? ' only' : '')
+          + (pc.id === currentPcId ? ' selected' : '');
         btn.disabled = pcs.length === 1 || isUploading;
-        btn.textContent = pc.nickname || pc.hostname;
-        // Windows name always visible under a nickname, so it's clear
-        // which machine a nickname belongs to.
-        if (pc.nickname) {
+        btn.textContent = displayName(pc);
+        // The Windows name only shows when two PCs would otherwise look
+        // the same (same nickname, or no nickname and the same name).
+        if (pc.nickname && pcs.some((other) => other !== pc && displayName(other) === displayName(pc))) {
           const hostEl = document.createElement('span');
           hostEl.className = 'pc-hostname';
-          hostEl.textContent = pc.hostname;
+          hostEl.textContent = ` · ${pc.hostname}`;
           btn.appendChild(hostEl);
         }
         btn.addEventListener('click', () => {
@@ -680,44 +921,50 @@
         });
         pcListEl.appendChild(btn);
       });
-      pcPickerEl.style.display = 'block';
+      pcPickerEl.style.display = 'flex';
     }
 
     function switchToPc(pc) {
       apiBase = pc.base;
       targetHost = pc.host;
+      targetPort = String(pc.port || targetPort);
       currentPcId = pc.id;
+      currentPcName = pc.nickname || pc.hostname;
       renderPcPicker();
       knownSignatures = new Set();
       syncInfoEl.style.display = 'none';
-      loadSyncInfo();
-      loadConfig();
       browseLoaded = false;
       fileListEl.innerHTML = '';
-      if (getPanel.classList.contains('active')) {
-        browseLoaded = true;
-        loadBrowse('');
-      }
+      outboxSectionEl.style.display = 'none';
+      phoneTextListEl.innerHTML = '';
+      onTargetReady();
     }
 
     // Asks the PC that served this page which PocketDump PCs it knows of,
     // then checks each one directly — that both drops PCs that have since
-    // gone offline and picks up each PC's current nickname.
+    // gone offline and picks up each PC's current nickname. Returns true if
+    // it switched to a different PC (which loads that PC's info itself).
     async function discoverPcs() {
       // The live camera page is opened on one specific PC over HTTPS and
       // always sends to that PC.
-      if (location.protocol === 'https:') return;
+      if (location.protocol === 'https:') return false;
       let peers;
       try {
         peers = (await fetchJson('/peers', 4000)).peers;
       } catch {
-        return; // Older PocketDump without /peers — stay on this PC.
+        return false; // Older PocketDump without /peers — stay on this PC.
       }
       const found = await Promise.all(peers.map(async (peer) => {
         const base = peer.self ? '' : `http://${peer.address}:${peer.port}`;
         try {
           const info = await fetchJson(`${base}/whoami`, 3000);
-          return { ...info, base, host: peer.self ? location.hostname : peer.address, self: peer.self };
+          return {
+            ...info,
+            base,
+            host: peer.self ? location.hostname : peer.address,
+            port: peer.self ? targetPort : peer.port,
+            self: peer.self
+          };
         } catch {
           return null;
         }
@@ -733,14 +980,21 @@
       const want = pcs.find((pc) => pc.id === savedId)
         || pcs.find((pc) => pc.id === currentPcId)
         || pcs.find((pc) => pc.self);
-      if (!want) return renderPcPicker();
+      if (!want) {
+        renderPcPicker();
+        return false;
+      }
       // Never swap PCs underneath a batch that's still sending.
       if (want.base !== apiBase && !isUploading) {
         switchToPc(want);
-      } else {
-        if (want.base === apiBase) currentPcId = want.id;
-        renderPcPicker();
+        return true;
       }
+      if (want.base === apiBase) {
+        currentPcId = want.id;
+        currentPcName = want.nickname || want.hostname;
+      }
+      renderPcPicker();
+      return false;
     }
 
     // A home-screen web app is often resumed rather than reloaded, so
@@ -749,26 +1003,115 @@
       if (document.visibilityState === 'visible') discoverPcs();
     });
 
+    // --- Pairing ---
+    const pairCardEl = document.getElementById('pair-card');
+    const pairPcNameEl = document.getElementById('pair-pc-name');
+    const pairPinEl = document.getElementById('pair-pin');
+    const pairBtn = document.getElementById('pair-btn');
+    const pairErrorEl = document.getElementById('pair-error');
+    const mainContentEl = document.getElementById('main-content');
+
+    function showPairing() {
+      pairPcNameEl.textContent = currentPcName || 'your PC';
+      pairErrorEl.textContent = '';
+      pairCardEl.style.display = 'block';
+      mainContentEl.style.display = 'none';
+    }
+
+    function hidePairing() {
+      pairCardEl.style.display = 'none';
+      mainContentEl.style.display = 'block';
+    }
+
+    async function pairWithPin(pin) {
+      const pcId = currentPcId;
+      const res = await fetch(`${apiBase}/pair`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin, device: /iPad/.test(navigator.userAgent) ? 'iPad' : 'iPhone' })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.token) throw new Error(data.error || 'Pairing failed.');
+      saveToken(pcId, data.token);
+    }
+
+    async function submitPin() {
+      const pin = pairPinEl.value.trim();
+      if (!/^\d{4}$/.test(pin)) {
+        pairErrorEl.textContent = 'The PIN is 4 digits.';
+        return;
+      }
+      pairBtn.disabled = true;
+      try {
+        await pairWithPin(pin);
+        pairPinEl.value = '';
+        onTargetReady();
+      } catch (err) {
+        pairErrorEl.textContent = err.message === 'Failed to fetch' ? 'Could not reach the PC — check WiFi connection.' : err.message;
+      } finally {
+        pairBtn.disabled = false;
+      }
+    }
+
+    pairBtn.addEventListener('click', submitPin);
+    pairPinEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') submitPin();
+    });
+
+    // Runs whenever the target PC is known or changes: pairs from a scanned
+    // QR if there's one waiting, asks for the PIN if still unpaired, and
+    // otherwise loads that PC's info.
+    async function onTargetReady() {
+      loadConfig();
+      if (!currentPcId) return; // Couldn't reach the PC at all.
+      if (!currentToken() && pendingQrPair && pendingQrPair.id === currentPcId) {
+        const { pin } = pendingQrPair;
+        pendingQrPair = null;
+        try {
+          await pairWithPin(pin);
+        } catch {
+          // Falls through to asking for the PIN (e.g. it was changed since).
+        }
+      }
+      if (!currentToken()) {
+        showPairing();
+        return;
+      }
+      hidePairing();
+      updateShortcutUrl();
+      loadSyncInfo();
+      if (getPanel.classList.contains('active')) {
+        browseLoaded = true;
+        loadGetPanel();
+      }
+      if (textPanel.classList.contains('active')) loadTexts();
+    }
+
     // --- Tabs ---
     const tabSend = document.getElementById('tab-send');
     const tabCamera = document.getElementById('tab-camera');
     const tabGet = document.getElementById('tab-get');
+    const tabText = document.getElementById('tab-text');
     const sendPanel = document.getElementById('send-panel');
     const cameraPanel = document.getElementById('camera-panel');
     const getPanel = document.getElementById('get-panel');
+    const textPanel = document.getElementById('text-panel');
     let browseLoaded = false;
 
     function activateTab(name) {
       tabSend.classList.toggle('active', name === 'send');
       tabCamera.classList.toggle('active', name === 'camera');
       tabGet.classList.toggle('active', name === 'get');
+      tabText.classList.toggle('active', name === 'text');
       sendPanel.classList.toggle('active', name === 'send');
       cameraPanel.classList.toggle('active', name === 'camera');
       getPanel.classList.toggle('active', name === 'get');
+      textPanel.classList.toggle('active', name === 'text');
       if (name === 'get' && !browseLoaded) {
         browseLoaded = true;
-        loadBrowse('');
+        loadGetPanel();
       }
+      if (name === 'text') loadTexts();
       // Only start the live camera stream while its tab is actually visible,
       // and release it the moment you leave — otherwise the camera stays on
       // (and the tab icon lit) in the background indefinitely.
@@ -780,18 +1123,57 @@
     tabSend.addEventListener('click', () => activateTab('send'));
     tabCamera.addEventListener('click', () => activateTab('camera'));
     tabGet.addEventListener('click', () => activateTab('get'));
+    tabText.addEventListener('click', () => activateTab('text'));
+
+    // Copy that also works over plain http, where iOS Safari has no
+    // navigator.clipboard.
+    async function copyToClipboard(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(text);
+          return true;
+        }
+      } catch {}
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch {}
+      ta.remove();
+      return ok;
+    }
+
+    function flashButton(btn, text) {
+      const original = btn.textContent;
+      btn.textContent = text;
+      setTimeout(() => { btn.textContent = original; }, 1500);
+    }
 
     // --- Send to PC (upload) ---
+    const PARALLEL_UPLOADS = 2;
     const input = document.getElementById('file-input');
+    const filePickerLabel = document.getElementById('file-picker-label');
     const card = document.getElementById('progress-card');
     const overallEl = document.getElementById('overall');
     const currentFileEl = document.getElementById('current-file');
     const barFill = document.getElementById('bar-fill');
     const summaryEl = document.getElementById('summary');
+    const retryBtn = document.getElementById('retry-btn');
     const logEl = document.getElementById('log');
     const syncInfoEl = document.getElementById('sync-info');
+    const shortcutUrlEl = document.getElementById('shortcut-url');
+    const copyShortcutUrlBtn = document.getElementById('copy-shortcut-url');
 
     let knownSignatures = new Set();
+    let lastFailed = [];
+    // Called with each file once it's safely on the PC (saved, or already
+    // there) — the camera queue uses it to drop only those photos.
+    const uploadedListeners = [];
 
     function fileSignature(file) {
       return `${file.name}|${file.size}|${file.lastModified}`;
@@ -810,7 +1192,7 @@
     async function loadSyncInfo() {
       try {
         const base = apiBase;
-        const res = await fetch(apiUrl('/sync-info'));
+        const res = await apiFetch('/sync-info');
         const data = await res.json();
         // A slow reply from the previous PC after switching mustn't
         // overwrite the new PC's info.
@@ -825,19 +1207,40 @@
       }
     }
 
-    loadSyncInfo();
+    function updateShortcutUrl() {
+      const token = currentToken();
+      shortcutUrlEl.textContent = token
+        ? `http://${targetHost}:${targetPort}/upload?t=${encodeURIComponent(token)}`
+        : 'Pair with a PC first';
+    }
+
+    copyShortcutUrlBtn.addEventListener('click', async () => {
+      if (!currentToken()) return;
+      flashButton(copyShortcutUrlBtn, (await copyToClipboard(shortcutUrlEl.textContent)) ? 'Copied' : 'Copy failed');
+    });
 
     input.addEventListener('change', () => {
       const files = Array.from(input.files);
+      input.value = '';
       if (files.length === 0) return;
-      uploadSequentially(files).then(() => {
-        input.value = '';
-      });
+      uploadSequentially(files);
+    });
+
+    retryBtn.addEventListener('click', () => {
+      if (lastFailed.length) uploadSequentially(lastFailed);
     });
 
     function formatSize(bytes) {
       if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      if (bytes < 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    }
+
+    function formatDuration(seconds) {
+      if (seconds < 60) return `${Math.max(1, Math.round(seconds))} s`;
+      const mins = Math.round(seconds / 60);
+      if (mins < 60) return `${mins} min`;
+      return `${Math.floor(mins / 60)} h ${mins % 60} min`;
     }
 
     function logLine(text) {
@@ -846,22 +1249,26 @@
       logEl.prepend(div);
     }
 
-    function uploadOne(file, base) {
+    function uploadOne(file, url, onProgress) {
       return new Promise((resolve, reject) => {
         const formData = new FormData();
-        formData.append('file', file, file.name);
         formData.append('lastModified', String(file.lastModified));
+        formData.append('file', file, file.name);
 
         const xhr = new XMLHttpRequest();
-        xhr.open('POST', `${base}/upload`);
+        xhr.open('POST', url);
 
         xhr.upload.addEventListener('progress', (e) => {
-          if (e.lengthComputable) {
-            barFill.style.width = `${Math.round((e.loaded / e.total) * 100)}%`;
-          }
+          if (e.lengthComputable) onProgress(Math.min(e.loaded, file.size));
         });
 
         xhr.onload = () => {
+          if (xhr.status === 401) {
+            saveToken(currentPcId, null);
+            showPairing();
+            reject(new Error('this iPhone needs to pair with the PC again'));
+            return;
+          }
           try {
             const data = JSON.parse(xhr.responseText);
             if (data.error) reject(new Error(data.error));
@@ -876,57 +1283,127 @@
       });
     }
 
+    // iOS drops an upload in progress when the screen locks, so keep it on
+    // while a batch is sending.
+    let noSleep = null;
+    function keepScreenAwake(on) {
+      try {
+        if (on) {
+          if (!noSleep && window.NoSleep) noSleep = new window.NoSleep();
+          if (noSleep) Promise.resolve(noSleep.enable()).catch(() => {});
+        } else if (noSleep) {
+          noSleep.disable();
+        }
+      } catch {
+        // Best effort — uploading still works, the screen just may lock.
+      }
+    }
+
+    function setUploadControlsDisabled(disabled) {
+      input.disabled = disabled;
+      filePickerLabel.classList.toggle('disabled', disabled);
+      cameraUploadBtn.disabled = disabled;
+      retryBtn.disabled = disabled;
+    }
+
     async function uploadSequentially(files) {
-      // The whole batch goes to the PC chosen when it started; the PC
-      // buttons are locked until it's done.
-      const base = apiBase;
+      // One batch at a time: a second one would share (and scramble) the
+      // progress card. The whole batch goes to the PC chosen when it
+      // started; the PC buttons are locked until it's done.
+      if (isUploading) return;
+      const url = apiUrl('/upload');
       isUploading = true;
       renderPcPicker();
+      setUploadControlsDisabled(true);
+      keepScreenAwake(true);
       try {
-        await uploadBatch(files, base);
+        await uploadBatch(files, url);
       } finally {
         isUploading = false;
+        keepScreenAwake(false);
+        setUploadControlsDisabled(false);
         renderPcPicker();
       }
     }
 
-    async function uploadBatch(files, base) {
+    // Sends PARALLEL_UPLOADS files at a time, with one progress bar for the
+    // whole batch by bytes, plus the MB sent and time left.
+    async function uploadBatch(files, url) {
       card.style.display = 'block';
       summaryEl.textContent = '';
+      retryBtn.style.display = 'none';
       logEl.innerHTML = '';
 
+      const toSend = files.filter((file) => !knownSignatures.has(fileSignature(file)));
+      const totalBytes = toSend.reduce((sum, file) => sum + file.size, 0);
+      const inFlight = new Map(); // file -> bytes sent so far
+      const queue = files.slice();
+      const failed = [];
+      const startedAt = Date.now();
+      let doneBytes = 0;
+      let finished = 0;
       let saved = 0;
       let duplicates = 0;
-      let failed = 0;
 
-      for (let i = 0; i < files.length; i += 1) {
-        const file = files[i];
-        overallEl.textContent = `Sending ${i + 1} of ${files.length}`;
-        currentFileEl.textContent = `${file.name} · ${formatSize(file.size)}`;
-        barFill.style.width = '0%';
-
-        if (knownSignatures.has(fileSignature(file))) {
-          duplicates += 1;
-          barFill.style.width = '100%';
-          logLine(`${file.name} → already on PC, skipped (no upload needed)`);
-          continue;
+      function updateProgress() {
+        let sent = doneBytes;
+        inFlight.forEach((bytes) => { sent += bytes; });
+        barFill.style.width = `${totalBytes ? Math.round((sent / totalBytes) * 100) : 100}%`;
+        overallEl.textContent = `${finished} of ${files.length} done`;
+        const elapsed = (Date.now() - startedAt) / 1000;
+        let eta = '';
+        if (elapsed > 2 && sent > 0 && sent < totalBytes) {
+          eta = ` · about ${formatDuration((totalBytes - sent) / (sent / elapsed))} left`;
         }
+        const names = Array.from(inFlight.keys(), (file) => file.name).join(', ');
+        currentFileEl.textContent = `${formatSize(sent)} of ${formatSize(totalBytes)}${eta}${names ? ` · ${names}` : ''}`;
+      }
 
-        try {
-          const result = await uploadOne(file, base);
-          if (result.status === 'saved') {
-            saved += 1;
-            knownSignatures.add(fileSignature(file));
-            logLine(`${file.name} → saved to ${result.folder}`);
-          } else {
+      function markUploaded(file) {
+        uploadedListeners.forEach((listener) => listener(file));
+      }
+
+      async function worker() {
+        while (queue.length) {
+          const file = queue.shift();
+          if (knownSignatures.has(fileSignature(file))) {
             duplicates += 1;
-            logLine(`${file.name} → already on PC, skipped`);
+            finished += 1;
+            logLine(`${file.name} → already on PC, skipped (no upload needed)`);
+            markUploaded(file);
+            updateProgress();
+            continue;
           }
-        } catch (err) {
-          failed += 1;
-          logLine(`${file.name} → failed (${err.message})`);
+          inFlight.set(file, 0);
+          updateProgress();
+          try {
+            const result = await uploadOne(file, url, (bytes) => {
+              inFlight.set(file, bytes);
+              updateProgress();
+            });
+            if (result.status === 'saved') {
+              saved += 1;
+              knownSignatures.add(fileSignature(file));
+              logLine(`${file.name} → saved to ${result.folder}`);
+            } else {
+              duplicates += 1;
+              logLine(`${file.name} → already on PC, skipped`);
+            }
+            markUploaded(file);
+          } catch (err) {
+            failed.push(file);
+            logLine(`${file.name} → failed (${err.message})`);
+          } finally {
+            inFlight.delete(file);
+            doneBytes += file.size;
+            finished += 1;
+            updateProgress();
+          }
         }
       }
+
+      updateProgress();
+      await Promise.all(Array.from({ length: Math.min(PARALLEL_UPLOADS, files.length) }, worker));
 
       overallEl.textContent = '';
       currentFileEl.textContent = '';
@@ -934,8 +1411,14 @@
 
       const parts = [`${saved} saved`];
       if (duplicates) parts.push(`${duplicates} already on PC`);
-      if (failed) parts.push(`${failed} failed`);
+      if (failed.length) parts.push(`${failed.length} failed`);
       summaryEl.textContent = `Done — ${parts.join(', ')}.`;
+
+      lastFailed = failed;
+      if (failed.length) {
+        retryBtn.textContent = `Retry ${failed.length} failed`;
+        retryBtn.style.display = 'block';
+      }
     }
 
     // --- Camera (capture & batch upload) ---
@@ -1066,13 +1549,17 @@
       }
 
       reviewHintEl.style.display = 'none';
-      const files = cameraQueue.map((entry) => entry.file);
-      uploadSequentially(files).then(() => {
-        cameraQueue.forEach((entry) => URL.revokeObjectURL(entry.url));
-        cameraQueue = [];
-        reviewHintEl.style.display = 'none';
-        renderCameraQueue();
-      });
+      uploadSequentially(cameraQueue.map((entry) => entry.file));
+    });
+
+    // Photos leave the queue one by one as each reaches the PC. Any that
+    // fail stay put (they exist nowhere else) for Retry or Upload All.
+    uploadedListeners.push((file) => {
+      const index = cameraQueue.findIndex((entry) => entry.file === file);
+      if (index === -1) return;
+      URL.revokeObjectURL(cameraQueue[index].url);
+      cameraQueue.splice(index, 1);
+      renderCameraQueue();
     });
 
     cameraClearBtn.addEventListener('click', () => {
@@ -1094,23 +1581,60 @@
     function loadConfig() {
       const base = apiBase;
       const host = targetHost;
-      certLink.href = apiUrl('/cert');
-      fetch(apiUrl('/config')).then((res) => res.json()).then(({ httpsPort, port, version }) => {
+      certLink.href = `${apiBase}/cert`;
+      fetch(`${apiBase}/config`).then((res) => res.json()).then(({ httpsPort, port, version }) => {
         if (base !== apiBase) return;
+        // The other page (https vs http) is a separate origin with its own
+        // storage, so hand this iPhone's token across in the link.
+        const token = currentToken();
+        const handoff = token && currentPcId ? `#token=${currentPcId}.${encodeURIComponent(token)}` : '';
         if (httpsPort) {
-          liveCameraLink.href = `https://${host}:${httpsPort}/`;
+          liveCameraLink.href = `https://${host}:${httpsPort}/${handoff}`;
           liveCameraLink.textContent = liveCameraLinkText;
         } else {
           liveCameraLink.removeAttribute('href');
           liveCameraLink.textContent = 'Live camera unavailable (HTTPS not set up on the PC)';
         }
-        if (port) nativeCameraLink.href = `http://${location.hostname}:${port}/`;
+        if (port) nativeCameraLink.href = `http://${location.hostname}:${port}/${handoff}`;
         if (version) appVersionEl.textContent = `v${version}`;
       }).catch(() => {});
     }
 
-    loadConfig();
-    discoverPcs();
+    // Reads what the URL fragment carries — #pair=<pcId>.<pin> from the
+    // PC's QR code, or #token=<pcId>.<token> from the live-camera link —
+    // then clears it so a home-screen bookmark doesn't keep a PIN.
+    async function init() {
+      const params = new URLSearchParams(location.hash.slice(1));
+      if (location.hash) history.replaceState(null, '', location.pathname + location.search);
+      const splitOnce = (value) => {
+        const dot = value.indexOf('.');
+        return dot > 0 ? [value.slice(0, dot), value.slice(dot + 1)] : [null, null];
+      };
+      if (params.get('token')) {
+        const [pcId, token] = splitOnce(params.get('token'));
+        if (pcId && token) saveToken(pcId, token);
+      }
+      if (params.get('pair')) {
+        const [pcId, pin] = splitOnce(params.get('pair'));
+        if (pcId && pin) {
+          // Send to the PC whose screen the QR was on, even if
+          // pocketdump.local happens to point at a different one.
+          savePcId(pcId);
+          if (!readTokens()[pcId]) pendingQrPair = { id: pcId, pin };
+        }
+      }
+      try {
+        const self = await fetchJson('/whoami', 4000);
+        currentPcId = self.id;
+        currentPcName = self.nickname || self.hostname;
+      } catch {
+        // Unreachable, or an older PocketDump — carry on without.
+      }
+      const switched = await discoverPcs();
+      if (!switched) onTargetReady();
+    }
+
+    init();
 
     if (isHttps) {
       nativeCaptureEl.style.display = 'none';
@@ -1538,16 +2062,74 @@
     // --- Get from PC (browse & download) ---
     const upBtn = document.getElementById('up-btn');
     const breadcrumbEl = document.getElementById('breadcrumb');
+    const zipLinkEl = document.getElementById('zip-link');
     const browseStatusEl = document.getElementById('browse-status');
     const fileListEl = document.getElementById('file-list');
+    const outboxSectionEl = document.getElementById('outbox-section');
+    const outboxListEl = document.getElementById('outbox-list');
     let currentDir = '';
+
+    function loadGetPanel() {
+      loadOutbox();
+      loadBrowse(currentDir);
+    }
+
+    // One download row: a thumbnail for photos/videos (from the PC, which
+    // uses Windows' own previews), then the name and size.
+    function downloadRow(name, size, href, thumbSrc) {
+      const li = document.createElement('li');
+      const link = document.createElement('a');
+      link.className = 'entry-link';
+      link.href = href;
+      if (thumbSrc) {
+        const img = document.createElement('img');
+        img.className = 'thumb';
+        img.loading = 'lazy';
+        img.alt = '';
+        img.src = thumbSrc;
+        img.onerror = () => img.remove();
+        link.appendChild(img);
+      }
+      const text = document.createElement('span');
+      text.className = 'entry-text';
+      text.textContent = thumbSrc ? name : `⬇️ ${name}`;
+      const sizeEl = document.createElement('span');
+      sizeEl.className = 'size';
+      sizeEl.textContent = formatSize(size);
+      text.appendChild(sizeEl);
+      link.appendChild(text);
+      li.appendChild(link);
+      return li;
+    }
+
+    async function loadOutbox() {
+      try {
+        const base = apiBase;
+        const data = await (await apiFetch('/outbox')).json();
+        if (base !== apiBase) return;
+        outboxListEl.innerHTML = '';
+        (data.items || []).forEach((item) => {
+          const id = encodeURIComponent(item.id);
+          outboxListEl.appendChild(downloadRow(
+            item.name,
+            item.size,
+            apiUrl(`/outbox/file?id=${id}`),
+            item.thumb ? apiUrl(`/outbox/thumb?id=${id}`) : null
+          ));
+        });
+        outboxSectionEl.style.display = data.items && data.items.length ? 'block' : 'none';
+      } catch {
+        outboxSectionEl.style.display = 'none';
+      }
+    }
 
     async function loadBrowse(dir) {
       browseStatusEl.textContent = 'Loading…';
       fileListEl.innerHTML = '';
+      zipLinkEl.style.display = 'none';
       try {
         const base = apiBase;
-        const res = await fetch(apiUrl(`/browse?dir=${encodeURIComponent(dir)}`));
+        const res = await apiFetch(`/browse?dir=${encodeURIComponent(dir)}`);
         const data = await res.json();
         if (base !== apiBase) return;
         if (data.error) {
@@ -1565,29 +2147,29 @@
           browseStatusEl.textContent = 'This folder is empty.';
         } else {
           browseStatusEl.textContent = '';
+          zipLinkEl.href = apiUrl(`/zip?dir=${encodeURIComponent(currentDir)}`);
+          zipLinkEl.style.display = 'inline';
         }
 
         data.entries.forEach((entry) => {
-          const li = document.createElement('li');
           if (entry.type === 'dir') {
+            const li = document.createElement('li');
             const btn = document.createElement('button');
             btn.className = 'entry-btn';
             btn.type = 'button';
             btn.textContent = `📁 ${entry.name}`;
             btn.addEventListener('click', () => loadBrowse(entry.path));
             li.appendChild(btn);
-          } else {
-            const link = document.createElement('a');
-            link.className = 'entry-link';
-            link.href = apiUrl(`/file?path=${encodeURIComponent(entry.path)}`);
-            link.textContent = `⬇️ ${entry.name}`;
-            const size = document.createElement('span');
-            size.className = 'size';
-            size.textContent = formatSize(entry.size);
-            link.appendChild(size);
-            li.appendChild(link);
+            fileListEl.appendChild(li);
+            return;
           }
-          fileListEl.appendChild(li);
+          const pathParam = encodeURIComponent(entry.path);
+          fileListEl.appendChild(downloadRow(
+            entry.name,
+            entry.size,
+            apiUrl(`/file?path=${pathParam}`),
+            entry.thumb ? apiUrl(`/thumb?path=${pathParam}`) : null
+          ));
         });
       } catch {
         browseStatusEl.textContent = 'Could not reach the PC — check WiFi connection.';
@@ -1597,6 +2179,95 @@
     upBtn.addEventListener('click', () => {
       const parent = currentDir.split('/').slice(0, -1).join('/');
       loadBrowse(parent);
+    });
+
+    // --- Text & links ---
+    const phoneTextInputEl = document.getElementById('phone-text-input');
+    const phoneSendTextBtn = document.getElementById('phone-send-text');
+    const textStatusEl = document.getElementById('text-status');
+    const phoneTextListEl = document.getElementById('phone-text-list');
+    let textPollTimer = null;
+
+    function formatClock(ts) {
+      const d = new Date(ts);
+      return d.toDateString() === new Date().toDateString()
+        ? d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+        : d.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    }
+
+    function renderTexts(texts) {
+      phoneTextListEl.innerHTML = '';
+      texts.forEach((entry) => {
+        const li = document.createElement('li');
+        const body = document.createElement('div');
+        body.className = 'text-body';
+        if (/^https?:\/\/\S+$/i.test(entry.text)) {
+          const a = document.createElement('a');
+          a.href = entry.text;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.textContent = entry.text;
+          body.appendChild(a);
+        } else {
+          body.appendChild(document.createTextNode(entry.text));
+        }
+        const meta = document.createElement('span');
+        meta.className = 'text-meta';
+        meta.textContent = `${entry.from === 'pc' ? 'From PC' : 'Sent from iPhone'} · ${formatClock(entry.at)}`;
+        body.appendChild(meta);
+        const copyBtn = document.createElement('button');
+        copyBtn.type = 'button';
+        copyBtn.className = 'small-btn';
+        copyBtn.textContent = 'Copy';
+        copyBtn.addEventListener('click', async () => {
+          flashButton(copyBtn, (await copyToClipboard(entry.text)) ? 'Copied' : 'Copy failed');
+        });
+        li.append(body, copyBtn);
+        phoneTextListEl.appendChild(li);
+      });
+    }
+
+    async function loadTexts() {
+      clearTimeout(textPollTimer);
+      if (!currentToken()) return;
+      try {
+        const base = apiBase;
+        const data = await (await apiFetch('/texts')).json();
+        if (base === apiBase) renderTexts(data.texts || []);
+      } catch {
+        // Tried again on the next poll.
+      }
+      // Keep checking for new texts from the PC while this tab is open.
+      if (textPanel.classList.contains('active') && document.visibilityState === 'visible') {
+        textPollTimer = setTimeout(loadTexts, 4000);
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && textPanel.classList.contains('active')) loadTexts();
+    });
+
+    phoneSendTextBtn.addEventListener('click', async () => {
+      const text = phoneTextInputEl.value.trim();
+      if (!text) return;
+      phoneSendTextBtn.disabled = true;
+      textStatusEl.textContent = '';
+      try {
+        const res = await apiFetch('/texts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text })
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        phoneTextInputEl.value = '';
+        textStatusEl.textContent = 'Sent to PC.';
+        loadTexts();
+      } catch (err) {
+        textStatusEl.textContent = err.message === 'Failed to fetch' ? 'Could not reach the PC — check WiFi connection.' : err.message;
+      } finally {
+        phoneSendTextBtn.disabled = false;
+      }
     });
   </script>
 </body>

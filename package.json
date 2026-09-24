@@ -1,6 +1,6 @@
 {
   "name": "pocketdump",
-  "version": "0.10.4",
+  "version": "0.11.0",
   "description": "Transfer photos, videos and files between iPhone and PC over local WiFi (or USB)",
   "author": "Alex Kim",
   "main": "src/main.js",
@@ -10,12 +10,14 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "bonjour-service": "^1.4.4",
     "electron-updater": "^6.8.9",
     "express": "^4.19.2",
     "multer": "^2.0.0",
+    "nosleep.js": "^0.12.0",
     "qrcode": "^1.5.3",
-    "selfsigned": "^1.10.14"
+    "selfsigned": "^5.5.0"
   },
   "devDependencies": {
     "electron": "^42.0.0",
