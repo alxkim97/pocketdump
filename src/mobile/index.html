@@ -933,7 +933,6 @@
       renderPcPicker();
       knownSignatures = new Set();
       syncInfoEl.style.display = 'none';
-      browseLoaded = false;
       fileListEl.innerHTML = '';
       outboxSectionEl.style.display = 'none';
       phoneTextListEl.innerHTML = '';
@@ -1080,10 +1079,7 @@
       hidePairing();
       updateShortcutUrl();
       loadSyncInfo();
-      if (getPanel.classList.contains('active')) {
-        browseLoaded = true;
-        loadGetPanel();
-      }
+      if (getPanel.classList.contains('active')) loadGetPanel();
       if (textPanel.classList.contains('active')) loadTexts();
     }
 
@@ -1096,7 +1092,6 @@
     const cameraPanel = document.getElementById('camera-panel');
     const getPanel = document.getElementById('get-panel');
     const textPanel = document.getElementById('text-panel');
-    let browseLoaded = false;
 
     function activateTab(name) {
       tabSend.classList.toggle('active', name === 'send');
@@ -1107,10 +1102,12 @@
       cameraPanel.classList.toggle('active', name === 'camera');
       getPanel.classList.toggle('active', name === 'get');
       textPanel.classList.toggle('active', name === 'text');
-      if (name === 'get' && !browseLoaded) {
-        browseLoaded = true;
-        loadGetPanel();
-      }
+      // Reload every time this tab is opened, not just the first time — the
+      // outbox and shared folder can both change on the PC side between
+      // visits, and there's no push/poll mechanism telling the phone that
+      // happened, so a stale one-time load could silently hide a file the
+      // PC just added until the whole page was reloaded.
+      if (name === 'get') loadGetPanel();
       if (name === 'text') loadTexts();
       // Only start the live camera stream while its tab is actually visible,
       // and release it the moment you leave — otherwise the camera stays on
