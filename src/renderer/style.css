@@ -151,15 +151,6 @@ button.link:hover {
 #open-folder, #open-source-folder {
   margin-top: 6px;
 }
-.rebuild-row {
-  margin-top: 10px;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.rebuild-row .muted {
-  margin: 0;
-}
 label[for="network-select"] {
   display: block;
   margin-top: 10px;

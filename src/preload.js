@@ -12,7 +12,6 @@ contextBridge.exposeInMainWorld('pocketdump', {
   getPairingInfo: () => ipcRenderer.invoke('get-pairing-info'),
   resetPairing: () => ipcRenderer.invoke('reset-pairing'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  rebuildIndex: () => ipcRenderer.invoke('rebuild-index'),
   getOutbox: () => ipcRenderer.invoke('get-outbox'),
   // Dropped files only carry their real path via webUtils in the preload.
   addOutboxFiles: (files) => ipcRenderer.invoke('add-outbox-files', Array.from(files, (f) => webUtils.getPathForFile(f))),

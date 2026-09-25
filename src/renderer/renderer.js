@@ -13,8 +13,6 @@ const statusDotEl = document.getElementById('status-dot');
 const statusTextEl = document.getElementById('status-text');
 const uploadLogEl = document.getElementById('upload-log');
 const themeToggleBtn = document.getElementById('theme-toggle');
-const rebuildBtn = document.getElementById('rebuild-index');
-const rebuildStatusEl = document.getElementById('rebuild-status');
 const footerTextEl = document.getElementById('app-footer-text');
 const checkUpdatesBtn = document.getElementById('check-updates-btn');
 const pcHostnameEl = document.getElementById('pc-hostname');
@@ -44,18 +42,15 @@ function showFolder(folder) {
   if (folder) {
     folderPathEl.textContent = folder;
     openFolderBtn.style.display = 'inline';
-    rebuildBtn.style.display = 'inline';
   } else {
     folderPathEl.textContent = 'No folder selected yet';
     openFolderBtn.style.display = 'none';
-    rebuildBtn.style.display = 'none';
   }
 }
 
 chooseFolderBtn.addEventListener('click', async () => {
   const folder = await window.pocketdump.chooseFolder();
   showFolder(folder);
-  rebuildStatusEl.textContent = '';
 });
 
 openFolderBtn.addEventListener('click', () => {
@@ -87,24 +82,6 @@ openSourceFolderBtn.addEventListener('click', () => {
 
 window.pocketdump.onSourceFolderInfo(({ folder }) => {
   showSourceFolder(folder);
-});
-
-rebuildBtn.addEventListener('click', async () => {
-  rebuildBtn.disabled = true;
-  rebuildStatusEl.textContent = 'Scanning folder…';
-  try {
-    const result = await window.pocketdump.rebuildIndex();
-    if (result.error) {
-      rebuildStatusEl.textContent = result.error;
-    } else {
-      const skipped = result.skipped ? ` (${result.skipped} couldn't be read and were skipped)` : '';
-      rebuildStatusEl.textContent = `Indexed ${result.count} file(s)${skipped} — duplicates will now be detected even if moved or renamed.`;
-    }
-  } catch (err) {
-    rebuildStatusEl.textContent = `Could not rebuild the index (${err.message}).`;
-  } finally {
-    rebuildBtn.disabled = false;
-  }
 });
 
 // --- Pairing ---

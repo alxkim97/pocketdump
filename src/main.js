@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const { autoUpdater } = require('electron-updater');
 const { Bonjour } = require('bonjour-service');
-const { startServer, stopServer, rebuildIndex, cleanupTemp, flushManifests } = require('./server');
+const { startServer, stopServer, cleanupTemp, flushManifests } = require('./server');
 const { getOrCreateCert } = require('./cert');
 const { writeFileAtomic } = require('./fsutil');
 
@@ -550,16 +550,30 @@ async function createWindow() {
   mainWindow = new BrowserWindow({
     width: 480,
     height: 740,
-    // Left resizable during creation so the auto-sizing below can actually
-    // take effect — setContentSize() on an already non-resizable window is
-    // unreliable on Windows. Locked down with setResizable(false) once the
-    // real size is set.
     resizable: true,
     show: false,
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.js')
     }
+  });
+
+  // Width stays fixed (the layout is a single 480px column), but height is
+  // left free to drag — more cards over time means more to scroll through,
+  // and a fixed-height utility window can't grow with the content the way
+  // a real fullscreen mode would, without actually going fullscreen (which
+  // would look wrong on a narrow single-column layout). Whatever height the
+  // user drags to is remembered below and reused on the next launch.
+  mainWindow.setMinimumSize(480, 300);
+  mainWindow.setMaximumSize(480, screen.getPrimaryDisplay().workAreaSize.height);
+  let resizeSaveTimer = null;
+  mainWindow.on('resize', () => {
+    clearTimeout(resizeSaveTimer);
+    resizeSaveTimer = setTimeout(() => {
+      if (!mainWindow || mainWindow.isDestroyed()) return;
+      const [, height] = mainWindow.getContentSize();
+      saveSettings({ ...loadSettings(), windowHeight: height });
+    }, 500);
   });
 
   // Closing the window just hides it — the server keeps running in the
@@ -584,25 +598,32 @@ async function createWindow() {
   notifySourceFolder();
   cleanupTemp(destinationFolder);
 
-  // The window's height needs to fit whichever state is currently showing —
-  // a returning user with folders already chosen sees two extra "Open
-  // folder" / "Rebuild index" rows that an empty-state layout doesn't have,
-  // so a fixed guess drifts out of sync with the content. Measuring the
-  // actual rendered height and sizing to it stays correct regardless.
-  // The short wait lets the renderer finish handling the folder-info IPC
-  // messages just sent above before layout is measured. Falls back to the
-  // constructor's default height if measurement fails for any reason —
-  // never worth leaving the window unshown over a sizing nicety.
-  try {
-    await new Promise((resolve) => setTimeout(resolve, 50));
-    const contentHeight = await mainWindow.webContents.executeJavaScript('document.body.scrollHeight');
-    const maxHeight = screen.getPrimaryDisplay().workAreaSize.height - 60;
-    const targetHeight = Math.min(Math.ceil(contentHeight), maxHeight);
-    mainWindow.setContentSize(480, targetHeight);
-  } catch (err) {
-    console.error('Could not auto-size window to content:', err);
+  const maxHeight = screen.getPrimaryDisplay().workAreaSize.height - 60;
+  if (settings.windowHeight && Number.isFinite(settings.windowHeight)) {
+    // The user has already dragged the window to a height they like —
+    // respect it instead of re-measuring and possibly shrinking it back
+    // down (still re-clamped to the current screen, in case this launch is
+    // on a smaller display than where it was last resized).
+    mainWindow.setContentSize(480, Math.min(Math.max(300, settings.windowHeight), maxHeight));
+  } else {
+    // First run (or no saved height yet): fit the window to whichever state
+    // is currently showing — a returning user with folders already chosen
+    // sees an extra "Open folder" row that an empty-state layout doesn't
+    // have, so a fixed guess drifts out of sync with the content. Measuring
+    // the actual rendered height and sizing to it stays correct regardless.
+    // The short wait lets the renderer finish handling the folder-info IPC
+    // messages just sent above before layout is measured. Falls back to the
+    // constructor's default height if measurement fails for any reason —
+    // never worth leaving the window unshown over a sizing nicety.
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const contentHeight = await mainWindow.webContents.executeJavaScript('document.body.scrollHeight');
+      const targetHeight = Math.min(Math.ceil(contentHeight), maxHeight);
+      mainWindow.setContentSize(480, targetHeight);
+    } catch (err) {
+      console.error('Could not auto-size window to content:', err);
+    }
   }
-  mainWindow.setResizable(false);
 
   // Always start hidden in the tray — whether launched by "Start with
   // Windows" or opened by hand — instead of popping the window on top of
@@ -690,18 +711,6 @@ ipcMain.handle('choose-source-folder', async () => {
 
 ipcMain.handle('open-source-folder', () => {
   if (sourceFolder) shell.openPath(sourceFolder);
-});
-
-ipcMain.handle('rebuild-index', async () => {
-  if (!destinationFolder) {
-    return { error: 'No destination folder selected yet.' };
-  }
-  try {
-    return await rebuildIndex(destinationFolder);
-  } catch (err) {
-    console.error('Rebuild index failed:', err);
-    return { error: `Could not rebuild the index (${err.code || err.message}).` };
-  }
 });
 
 ipcMain.handle('get-pairing-info', () => getPairingInfo());
