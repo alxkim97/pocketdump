@@ -658,18 +658,23 @@
     <details class="setup-card">
       <summary>⚡ Send straight from Photos (Share Sheet shortcut)</summary>
       <p>Set this up once, then in Photos tap Share → PocketDump. Sends the original files (HEIC stays HEIC) without opening this page.</p>
-      <ol>
-        <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, and name the shortcut "PocketDump".</li>
-        <li>Tap the <strong>ⓘ</strong> button, turn on <strong>Show in Share Sheet</strong>, and set it to receive <strong>Images</strong> and <strong>Media</strong>.</li>
-        <li>Add a <strong>Repeat with Each</strong> action, repeating over <strong>Shortcut Input</strong>.</li>
-        <li>Inside the repeat, add <strong>Get Contents of URL</strong>. Paste the address below, set Method to <strong>POST</strong> and Request Body to <strong>Form</strong>, then add a <strong>File</strong> field named <code>file</code> set to <strong>Repeat Item</strong>.</li>
-        <li>Optional: add a <strong>Text</strong> field named <code>lastModified</code> set to Repeat Item's <strong>Creation Date</strong> (Date Format: ISO 8601), so each photo is filed under the day it was taken.</li>
-      </ol>
+      <p><a class="step-link" href="https://www.icloud.com/shortcuts/f36ef9337b0f4355832c107d4c388f8a" target="_blank" rel="noopener">⬇️ Get the PocketDump Shortcut</a></p>
+      <p>After tapping "Add Shortcut", open it once, tap its <strong>Get Contents of URL</strong> step, and replace the web address inside it with the one below — it's unique to this iPhone, so the imported one won't work as-is.</p>
       <div class="copy-box">
         <code id="shortcut-url">Pair with a PC first</code>
         <button id="copy-shortcut-url" class="small-btn" type="button">Copy</button>
       </div>
       <p>This address contains this iPhone's pairing key — don't share it.</p>
+      <details>
+        <summary>Or build it from scratch</summary>
+        <ol>
+          <li>Open the <strong>Shortcuts</strong> app, tap <strong>+</strong>, and name the shortcut "PocketDump".</li>
+          <li>Tap the <strong>ⓘ</strong> button, turn on <strong>Show in Share Sheet</strong>, and set it to receive <strong>Images</strong> and <strong>Media</strong>.</li>
+          <li>Add a <strong>Repeat with Each</strong> action, repeating over <strong>Shortcut Input</strong>.</li>
+          <li>Inside the repeat, add <strong>Get Contents of URL</strong>. Paste the address above, set Method to <strong>POST</strong> and Request Body to <strong>Form</strong>, then add a <strong>File</strong> field named <code>file</code> set to <strong>Repeat Item</strong>.</li>
+          <li>Optional: add a <strong>Text</strong> field named <code>lastModified</code> set to Repeat Item's <strong>Creation Date</strong> (Date Format: ISO 8601), so each photo is filed under the day it was taken.</li>
+        </ol>
+      </details>
     </details>
   </div>
 
