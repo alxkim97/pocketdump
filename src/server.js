@@ -282,7 +282,7 @@ function createPairingLimiter() {
 function startServer({
   port, httpsPort, certOptions, appVersion,
   getDestinationFolder, getSourceFolder, getPcInfo, getPeers,
-  auth, getOutbox, getTexts, addText, getThumbnail, onUpload
+  auth, getOutbox, removeOutboxItem, getTexts, addText, getThumbnail, onUpload
 }) {
   const app = express();
   const upload = multer({
@@ -633,7 +633,14 @@ function startServer({
   app.get('/outbox/file', requireAuth, (req, res) => {
     const item = findOutboxItem(String(req.query.id || ''));
     if (!item) return res.status(404).json({ error: 'That file is no longer offered by the PC.' });
-    res.download(item.path, item.name);
+    // Once the phone has actually received the file, it no longer needs to
+    // sit in "Send to iPhone" — auto-clearing it here (rather than leaving
+    // it for the user to remove by hand) keeps that list from just growing
+    // forever. A failed/aborted transfer (err set) leaves the item in
+    // place, so an interrupted download can be retried.
+    res.download(item.path, item.name, (err) => {
+      if (!err) removeOutboxItem(item.id);
+    });
   });
 
   app.get('/outbox/thumb', requireAuth, (req, res, next) => {

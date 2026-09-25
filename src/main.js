@@ -149,6 +149,10 @@ function addToOutbox(filePaths) {
   saveOutbox([...added, ...outbox]);
 }
 
+function removeOutboxItem(id) {
+  saveOutbox((loadSettings().outbox || []).filter((item) => item.id !== id));
+}
+
 // --- Text & links ---
 function getTexts() {
   return loadSettings().texts || [];
@@ -517,10 +521,52 @@ function stopMdns() {
   instance.unpublishAll(() => instance.destroy());
 }
 
+// Quick, window-free ways to send something from the tray — matches how
+// the app is mostly used (tray-first, main window rarely opened).
+async function sendFileFromTray() {
+  const result = await dialog.showOpenDialog({ properties: ['openFile', 'multiSelections'] });
+  if (!result.canceled) addToOutbox(result.filePaths);
+}
+
+let quickTextWindow = null;
+function openQuickTextWindow() {
+  if (quickTextWindow && !quickTextWindow.isDestroyed()) {
+    quickTextWindow.show();
+    quickTextWindow.focus();
+    return;
+  }
+  quickTextWindow = new BrowserWindow({
+    width: 380,
+    height: 180,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    alwaysOnTop: true,
+    title: 'Quick Text to iPhone',
+    icon: path.join(__dirname, 'assets', 'icon.png'),
+    webPreferences: {
+      preload: path.join(__dirname, 'quicktext', 'preload.js')
+    }
+  });
+  quickTextWindow.setMenuBarVisibility(false);
+  quickTextWindow.loadFile(path.join(__dirname, 'quicktext', 'index.html'));
+  quickTextWindow.on('closed', () => { quickTextWindow = null; });
+}
+
+ipcMain.handle('quick-text-send', (event, text) => {
+  const clean = String(text || '').trim().slice(0, 10_000);
+  if (clean) addText(clean, 'pc');
+  const win = BrowserWindow.fromWebContents(event.sender);
+  if (win) win.close();
+});
+
 function rebuildTrayMenu() {
   const startAtLogin = app.getLoginItemSettings().openAtLogin;
   tray.setContextMenu(Menu.buildFromTemplate([
     { label: 'Open PocketDump', click: () => { mainWindow.show(); mainWindow.focus(); } },
+    { type: 'separator' },
+    { label: '📤 Send File to iPhone…', click: () => sendFileFromTray() },
+    { label: '💬 Quick Text to iPhone…', click: () => openQuickTextWindow() },
     { type: 'separator' },
     {
       label: 'Start with Windows',
@@ -662,6 +708,7 @@ async function createWindow() {
     getPeers,
     auth: { isValidToken, pair: pairDevice },
     getOutbox,
+    removeOutboxItem,
     getTexts,
     addText,
     getThumbnail,
@@ -733,9 +780,7 @@ ipcMain.handle('choose-outbox-files', async () => {
   if (!result.canceled) addToOutbox(result.filePaths);
 });
 
-ipcMain.handle('remove-outbox-item', (_event, id) => {
-  saveOutbox((loadSettings().outbox || []).filter((item) => item.id !== id));
-});
+ipcMain.handle('remove-outbox-item', (_event, id) => removeOutboxItem(id));
 
 ipcMain.handle('clear-outbox', () => saveOutbox([]));
 

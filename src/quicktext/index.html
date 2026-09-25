@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Quick Text to iPhone</title>
+  <style>
+    :root {
+      --bg: #f4f5f7;
+      --card-bg: #ffffff;
+      --text: #1c1c1e;
+      --muted: #6e6e73;
+      --accent-fill: #0060df;
+      --border: #eee;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #161618;
+        --card-bg: #2a2a2d;
+        --text: #f2f2f7;
+        --muted: #a0a0a6;
+        --border: #3a3a3d;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 14px;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 14px;
+      padding: 10px;
+    }
+    textarea:focus {
+      outline: 2px solid var(--accent-fill);
+      outline-offset: -1px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      gap: 8px;
+    }
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    button {
+      background: var(--accent-fill);
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  </style>
+</head>
+<body>
+  <textarea id="text" placeholder="Type or paste something to send to your iPhone…" autofocus></textarea>
+  <div class="row">
+    <span class="hint">Enter to send · Esc to cancel</span>
+    <button id="send-btn" type="button" disabled>Send</button>
+  </div>
+  <script>
+    const textEl = document.getElementById('text');
+    const sendBtn = document.getElementById('send-btn');
+
+    textEl.addEventListener('input', () => {
+      sendBtn.disabled = !textEl.value.trim();
+    });
+
+    async function send() {
+      const value = textEl.value.trim();
+      if (!value) return;
+      sendBtn.disabled = true;
+      await window.quickText.send(value);
+      // The main process closes this window once the send completes.
+    }
+
+    sendBtn.addEventListener('click', send);
+    textEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      } else if (e.key === 'Escape') {
+        window.close();
+      }
+    });
+  </script>
+</body>
+</html>
