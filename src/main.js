@@ -604,21 +604,22 @@ async function createWindow() {
     }
   });
 
-  // Width stays fixed (the layout is a single 480px column), but height is
-  // left free to drag — more cards over time means more to scroll through,
-  // and a fixed-height utility window can't grow with the content the way
-  // a real fullscreen mode would, without actually going fullscreen (which
-  // would look wrong on a narrow single-column layout). Whatever height the
-  // user drags to is remembered below and reused on the next launch.
-  mainWindow.setMinimumSize(480, 300);
-  mainWindow.setMaximumSize(480, screen.getPrimaryDisplay().workAreaSize.height);
+  // Both dimensions are now free to drag — the renderer's card layout is a
+  // CSS grid that reflows into more columns as the window gets wider
+  // (style.css), so widening it is a real alternative to scrolling, not
+  // just empty space. Whatever size the user drags to is remembered below
+  // and reused on the next launch. A generous minimum keeps a card from
+  // ever getting too cramped to use; the maximum is the screen itself.
+  const workArea = screen.getPrimaryDisplay().workAreaSize;
+  mainWindow.setMinimumSize(360, 300);
+  mainWindow.setMaximumSize(workArea.width, workArea.height);
   let resizeSaveTimer = null;
   mainWindow.on('resize', () => {
     clearTimeout(resizeSaveTimer);
     resizeSaveTimer = setTimeout(() => {
       if (!mainWindow || mainWindow.isDestroyed()) return;
-      const [, height] = mainWindow.getContentSize();
-      saveSettings({ ...loadSettings(), windowHeight: height });
+      const [width, height] = mainWindow.getContentSize();
+      saveSettings({ ...loadSettings(), windowWidth: width, windowHeight: height });
     }, 500);
   });
 
@@ -645,12 +646,14 @@ async function createWindow() {
   cleanupTemp(destinationFolder);
 
   const maxHeight = screen.getPrimaryDisplay().workAreaSize.height - 60;
+  const maxWidth = screen.getPrimaryDisplay().workAreaSize.width;
   if (settings.windowHeight && Number.isFinite(settings.windowHeight)) {
-    // The user has already dragged the window to a height they like —
+    // The user has already dragged the window to a size they like —
     // respect it instead of re-measuring and possibly shrinking it back
     // down (still re-clamped to the current screen, in case this launch is
     // on a smaller display than where it was last resized).
-    mainWindow.setContentSize(480, Math.min(Math.max(300, settings.windowHeight), maxHeight));
+    const width = Math.min(Math.max(360, settings.windowWidth || 480), maxWidth);
+    mainWindow.setContentSize(width, Math.min(Math.max(300, settings.windowHeight), maxHeight));
   } else {
     // First run (or no saved height yet): fit the window to whichever state
     // is currently showing — a returning user with folders already chosen

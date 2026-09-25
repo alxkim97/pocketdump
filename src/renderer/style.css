@@ -55,11 +55,23 @@ body {
 }
 h1 { margin: 0 0 4px; font-size: 20px; }
 .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
+/* At the original 480px width, minmax(300px, 1fr) only ever fits one
+   column — same single-column look as before. Widen the window (now
+   draggable in width, not just height — see main.js) and cards reflow
+   into 2+ columns automatically, cutting how much there is to scroll
+   without a fixed breakpoint to maintain. align-items:start keeps each
+   card its own natural height instead of stretching to match the
+   tallest one in its row. */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  align-items: start;
+  gap: 12px;
+}
 .card {
   background: var(--card-bg);
   border-radius: 12px;
   padding: 14px 16px;
-  margin-bottom: 12px;
   box-shadow: 0 1px 3px rgba(0,0,0,0.08);
   transition: background-color 180ms ease;
 }
@@ -243,7 +255,11 @@ label[for="nickname-input"] {
 #upload-log li.saved { color: #1c8d3a; }
 #app-footer {
   text-align: center;
-  margin-top: 8px;
+  /* Was 8px + the old .card margin-bottom (12px); that per-card margin is
+     gone now that .cards-grid's gap handles spacing between cards, so this
+     makes up the difference to keep the same breathing room before the
+     footer. */
+  margin-top: 20px;
 }
 .link-btn {
   border: none;
