@@ -13,6 +13,7 @@ const statusDotEl = document.getElementById('status-dot');
 const statusTextEl = document.getElementById('status-text');
 const uploadLogEl = document.getElementById('upload-log');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const maximizeToggleBtn = document.getElementById('maximize-toggle');
 const footerTextEl = document.getElementById('app-footer-text');
 const checkUpdatesBtn = document.getElementById('check-updates-btn');
 const pcHostnameEl = document.getElementById('pc-hostname');
@@ -266,12 +267,21 @@ networkSelectEl.addEventListener('change', () => {
   window.pocketdump.selectNetwork(networkSelectEl.value);
 });
 
+const uploadStatusText = {
+  saved: (item) => `Receiving… ${item.name} → ${item.folder}`,
+  duplicate: (item) => `Receiving… ${item.name} (already on PC, skipped)`,
+  sent: (item) => `Sent ${item.name} → your iPhone`
+};
+const uploadLogText = {
+  saved: (item) => `${item.name} → ${item.folder}`,
+  duplicate: (item) => `${item.name} (already imported, skipped)`,
+  sent: (item) => `${item.name} → your iPhone`
+};
+
 let idleTimer = null;
 window.pocketdump.onUploadEvent((item) => {
   statusDotEl.classList.add('active');
-  statusTextEl.textContent = item.status === 'saved'
-    ? `Receiving… ${item.name} → ${item.folder}`
-    : `Receiving… ${item.name} (already on PC, skipped)`;
+  statusTextEl.textContent = uploadStatusText[item.status](item);
   clearTimeout(idleTimer);
   idleTimer = setTimeout(() => {
     statusDotEl.classList.remove('active');
@@ -280,9 +290,7 @@ window.pocketdump.onUploadEvent((item) => {
 
   const li = document.createElement('li');
   li.className = item.status;
-  li.textContent = item.status === 'saved'
-    ? `${item.name} → ${item.folder}`
-    : `${item.name} (already imported, skipped)`;
+  li.textContent = uploadLogText[item.status](item);
   uploadLogEl.prepend(li);
 });
 
@@ -312,4 +320,8 @@ window.pocketdump.getAppInfo().then(({ version, credit }) => {
 
 checkUpdatesBtn.addEventListener('click', () => {
   window.pocketdump.checkForUpdates();
+});
+
+maximizeToggleBtn.addEventListener('click', () => {
+  window.pocketdump.toggleMaximize();
 });

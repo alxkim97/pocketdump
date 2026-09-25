@@ -718,6 +718,13 @@ async function createWindow() {
     onUpload: (info) => {
       sendToWindow('upload-event', info);
       noteUploadForNotification(info);
+    },
+    // The phone side has no equivalent "receiving…" feedback for a PC→phone
+    // transfer, and until now neither did the Status card here — a file
+    // sent to the outbox just silently vanished once downloaded, with
+    // nothing in the log to confirm it actually reached the phone.
+    onOutboxSent: (item) => {
+      sendToWindow('upload-event', { name: item.name, status: 'sent' });
     }
   });
 
@@ -725,6 +732,12 @@ async function createWindow() {
   const best = pickBestCandidate(candidates);
   await sendServerInfo(mdnsAvailable ? 'mdns' : best.address);
 }
+
+ipcMain.handle('toggle-maximize', () => {
+  if (!mainWindow) return;
+  if (mainWindow.isMaximized()) mainWindow.unmaximize();
+  else mainWindow.maximize();
+});
 
 ipcMain.handle('select-network', async (_event, address) => {
   await sendServerInfo(address);

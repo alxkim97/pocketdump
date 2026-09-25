@@ -282,7 +282,7 @@ function createPairingLimiter() {
 function startServer({
   port, httpsPort, certOptions, appVersion,
   getDestinationFolder, getSourceFolder, getPcInfo, getPeers,
-  auth, getOutbox, removeOutboxItem, getTexts, addText, getThumbnail, onUpload
+  auth, getOutbox, removeOutboxItem, getTexts, addText, getThumbnail, onUpload, onOutboxSent
 }) {
   const app = express();
   const upload = multer({
@@ -347,6 +347,15 @@ function startServer({
   // when the screen locks).
   app.get('/nosleep.js', (req, res) => {
     res.sendFile(require.resolve('nosleep.js/dist/NoSleep.min.js'));
+  });
+
+  // "Add to Home Screen" without this falls back to a generic letter tile.
+  // This exact path is also iOS's own implicit fallback convention (it
+  // checks here even with no <link> tag at all), so it's served under this
+  // name whether or not the page's own <link rel="apple-touch-icon"> loads.
+  app.get('/apple-touch-icon.png', (req, res) => {
+    res.set('Cache-Control', 'public, max-age=86400');
+    res.sendFile(path.join(__dirname, 'assets', 'icon.png'));
   });
 
   // Lets the mobile page discover the HTTPS port for the live-camera view
@@ -639,7 +648,9 @@ function startServer({
     // forever. A failed/aborted transfer (err set) leaves the item in
     // place, so an interrupted download can be retried.
     res.download(item.path, item.name, (err) => {
-      if (!err) removeOutboxItem(item.id);
+      if (err) return;
+      removeOutboxItem(item.id);
+      if (onOutboxSent) onOutboxSent(item);
     });
   });
 

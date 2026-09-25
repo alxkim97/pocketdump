@@ -53,6 +53,11 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
+.top-bar-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
 h1 { margin: 0 0 4px; font-size: 20px; }
 .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
 /* At the original 480px width, minmax(300px, 1fr) only ever fits one
@@ -253,6 +258,9 @@ label[for="nickname-input"] {
 }
 #upload-log li.duplicate { color: #aa6c00; }
 #upload-log li.saved { color: #1c8d3a; }
+/* Distinct from .saved (green, phone→PC) so the log stays readable at a
+   glance about which direction each line went. */
+#upload-log li.sent { color: var(--accent); }
 #app-footer {
   text-align: center;
   /* Was 8px + the old .card margin-bottom (12px); that per-card margin is
