@@ -113,7 +113,20 @@ function pairDevice(pin, deviceName) {
 
 function getPairingInfo() {
   const { pin, devices } = getPairing();
-  return { pin, deviceCount: devices.length };
+  // tokenHash is a one-way hash of the bearer token, not the token itself,
+  // so it's safe to hand to the renderer as this device's id.
+  return {
+    pin,
+    deviceCount: devices.length,
+    devices: devices.map((d) => ({ id: d.tokenHash, name: d.name, pairedAt: d.pairedAt })),
+  };
+}
+
+function unpairDevice(id) {
+  const pairing = getPairing();
+  const devices = pairing.devices.filter((d) => d.tokenHash !== id);
+  saveSettings({ ...loadSettings(), devices });
+  return getPairingInfo();
 }
 
 // --- Send to iPhone (outbox) ---
@@ -800,6 +813,8 @@ ipcMain.handle('reset-pairing', async () => {
   if (currentAddress) await sendServerInfo(currentAddress);
   return getPairingInfo();
 });
+
+ipcMain.handle('unpair-device', (_event, id) => unpairDevice(String(id)));
 
 ipcMain.handle('get-outbox', () => getOutbox());
 

@@ -89,13 +89,40 @@ window.pocketdump.onSourceFolderInfo(({ folder }) => {
 const pairingPinEl = document.getElementById('pairing-pin');
 const pairingCountEl = document.getElementById('pairing-count');
 const resetPairingBtn = document.getElementById('reset-pairing');
+const pairedDevicesList = document.getElementById('paired-devices-list');
 
-function showPairingInfo({ pin, deviceCount }) {
+function renderPairedDevices(devices) {
+  pairedDevicesList.innerHTML = '';
+  for (const device of devices) {
+    const li = document.createElement('li');
+    const main = document.createElement('span');
+    main.className = 'item-main';
+    main.textContent = device.name;
+    const when = document.createElement('span');
+    when.className = 'item-meta';
+    when.textContent = `Paired ${new Date(device.pairedAt).toLocaleDateString()}`;
+    main.appendChild(document.createElement('br'));
+    main.appendChild(when);
+    const unpair = document.createElement('button');
+    unpair.type = 'button';
+    unpair.className = 'plain';
+    unpair.textContent = 'Unpair';
+    unpair.addEventListener('click', async () => {
+      showPairingInfo(await window.pocketdump.unpairDevice(device.id));
+    });
+    li.appendChild(main);
+    li.appendChild(unpair);
+    pairedDevicesList.appendChild(li);
+  }
+}
+
+function showPairingInfo({ pin, deviceCount, devices }) {
   pairingPinEl.textContent = pin;
   pairingCountEl.textContent = deviceCount
     ? `${deviceCount} phone${deviceCount === 1 ? '' : 's'} paired`
     : 'No phones paired yet';
-  resetPairingBtn.style.display = deviceCount ? 'inline' : 'none';
+  resetPairingBtn.style.display = deviceCount > 1 ? 'inline' : 'none';
+  renderPairedDevices(devices || []);
 }
 
 window.pocketdump.getPairingInfo().then(showPairingInfo);

@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('pocketdump', {
   setNickname: (nickname) => ipcRenderer.invoke('set-nickname', nickname),
   getPairingInfo: () => ipcRenderer.invoke('get-pairing-info'),
   resetPairing: () => ipcRenderer.invoke('reset-pairing'),
+  unpairDevice: (id) => ipcRenderer.invoke('unpair-device', id),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   toggleMaximize: () => ipcRenderer.invoke('toggle-maximize'),
   getOutbox: () => ipcRenderer.invoke('get-outbox'),
