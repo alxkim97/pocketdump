@@ -206,6 +206,12 @@ function renderTexts(texts) {
       setTimeout(() => { copy.textContent = 'Copy'; }, 1500);
     });
     li.appendChild(copy);
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'plain';
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', () => window.pocketdump.removeText(entry.id));
+    li.appendChild(remove);
     textListEl.appendChild(li);
   });
   clearTextsBtn.style.display = texts.length ? 'inline' : 'none';

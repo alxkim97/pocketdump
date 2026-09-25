@@ -812,6 +812,12 @@ ipcMain.handle('clear-texts', () => {
   sendToWindow('texts-updated', []);
 });
 
+ipcMain.handle('remove-text', (_event, id) => {
+  const texts = getTexts().filter((entry) => entry.id !== id);
+  saveSettings({ ...loadSettings(), texts });
+  sendToWindow('texts-updated', texts);
+});
+
 ipcMain.handle('copy-text', (_event, text) => clipboard.writeText(String(text || '')));
 
 ipcMain.handle('open-link', (_event, url) => {

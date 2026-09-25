@@ -539,7 +539,7 @@
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
-    #zip-link {
+    #zip-link, #outbox-zip-link {
       display: none;
       margin-left: auto;
       font-size: 13px;
@@ -769,7 +769,10 @@
 
   <div id="get-panel" class="panel">
     <div id="outbox-section" style="display:none">
-      <p class="section-title">Sent from PC</p>
+      <div class="browse-toolbar">
+        <p class="section-title">Sent from PC</p>
+        <a id="outbox-zip-link" href="#">⬇️ Download all (.zip)</a>
+      </div>
       <ul id="outbox-list" class="file-list"></ul>
     </div>
     <p class="section-title">Shared folder</p>
@@ -2068,6 +2071,7 @@
     const fileListEl = document.getElementById('file-list');
     const outboxSectionEl = document.getElementById('outbox-section');
     const outboxListEl = document.getElementById('outbox-list');
+    const outboxZipLinkEl = document.getElementById('outbox-zip-link');
     let currentDir = '';
 
     function loadGetPanel() {
@@ -2119,6 +2123,14 @@
           ));
         });
         outboxSectionEl.style.display = data.items && data.items.length ? 'block' : 'none';
+        // Only worth offering as a batch when there's more than one file —
+        // for a single item it's the same download either way.
+        if (data.items && data.items.length > 1) {
+          outboxZipLinkEl.href = apiUrl('/outbox/zip');
+          outboxZipLinkEl.style.display = 'inline';
+        } else {
+          outboxZipLinkEl.style.display = 'none';
+        }
       } catch {
         outboxSectionEl.style.display = 'none';
       }

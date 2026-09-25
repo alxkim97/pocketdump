@@ -660,6 +660,52 @@ function startServer({
     sendThumbnail(res, item.path, next);
   });
 
+  // The whole outbox as one .zip, for grabbing everything in one tap
+  // instead of downloading each file individually. Items can come from
+  // different folders on the PC and might share a name, so names are
+  // disambiguated within the archive to avoid one silently overwriting
+  // another. Cleared from the outbox the same way a single download is —
+  // only once the zip has actually finished sending, so an interrupted
+  // transfer leaves everything in place to retry.
+  app.get('/outbox/zip', requireAuth, (req, res) => {
+    const items = getOutbox();
+    if (!items.length) return res.status(404).json({ error: 'Nothing to download.' });
+
+    const usedNames = new Set();
+    function uniqueName(name) {
+      if (!usedNames.has(name)) { usedNames.add(name); return name; }
+      const ext = path.extname(name);
+      const base = path.basename(name, ext);
+      let i = 2;
+      let candidate = `${base} (${i})${ext}`;
+      while (usedNames.has(candidate)) { i += 1; candidate = `${base} (${i})${ext}`; }
+      usedNames.add(candidate);
+      return candidate;
+    }
+
+    const archive = archiver('zip', { store: true });
+    archive.on('warning', (err) => console.error('outbox zip warning:', err));
+    archive.on('error', (err) => {
+      console.error('outbox zip error:', err);
+      res.destroy(err);
+    });
+    res.on('close', () => {
+      if (!res.writableFinished) archive.abort();
+    });
+    res.on('finish', () => {
+      items.forEach((item) => {
+        removeOutboxItem(item.id);
+        if (onOutboxSent) onOutboxSent(item);
+      });
+    });
+    res.attachment('PocketDump.zip');
+    archive.pipe(res);
+    for (const item of items) {
+      archive.file(item.path, { name: uniqueName(item.name) });
+    }
+    archive.finalize();
+  });
+
   // Text and links passed between phone and PC.
   app.get('/texts', requireAuth, (req, res) => {
     res.json({ texts: getTexts() });

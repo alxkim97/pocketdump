@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('pocketdump', {
   getTexts: () => ipcRenderer.invoke('get-texts'),
   sendText: (text) => ipcRenderer.invoke('send-text', text),
   clearTexts: () => ipcRenderer.invoke('clear-texts'),
+  removeText: (id) => ipcRenderer.invoke('remove-text', id),
   copyText: (text) => ipcRenderer.invoke('copy-text', text),
   openLink: (url) => ipcRenderer.invoke('open-link', url),
   onServerInfo: (callback) => ipcRenderer.on('server-info', (_event, info) => callback(info)),
