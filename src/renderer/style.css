@@ -66,14 +66,16 @@ body {
 }
 h1 { margin: 0 0 4px; font-size: 20px; }
 .subtitle { margin: 0 0 16px; color: var(--muted); font-size: 13px; }
-/* At the original 480px width, minmax(300px, 1fr) only ever fits one
-   column — same single-column look as before. Widen the window (now
-   draggable in width, not just height — see main.js) and cards reflow
-   into 2+ columns automatically, cutting how much there is to scroll
-   without a fixed breakpoint to maintain. align-items:start keeps each
-   card its own natural height instead of stretching to match the
-   tallest one in its row. Capped at 3 columns via body's max-width
-   below — beyond that, more/narrower columns just looked scattered. */
+/* At the original ~384px default width, minmax(300px, 1fr) only ever fits
+   one column — cards just stack, in which case "This PC"'s collapsed
+   details (below) only pushes cards further down its own column, not
+   sideways into any shared row. Widen the window (now draggable in width,
+   not just height — see main.js) and cards reflow into 2-3 columns
+   automatically, cutting how much there is to scroll without a fixed
+   breakpoint to maintain. align-items:start keeps each card its own
+   natural height instead of stretching to match the tallest one in its
+   row. Capped at 3 columns via body's max-width below — beyond that,
+   more/narrower columns just looked scattered. */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

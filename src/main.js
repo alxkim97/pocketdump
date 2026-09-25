@@ -602,9 +602,15 @@ function createTray() {
   tray.on('click', () => { mainWindow.show(); mainWindow.focus(); });
 }
 
+// Default width for a fresh install (or after settings are reset) with no
+// saved size yet — narrower than the original 480, settled on after using
+// the app for a while. Real width still comes from setContentSize below;
+// this constructor value only matters for the brief moment before that.
+const DEFAULT_WINDOW_WIDTH = 384;
+
 async function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 480,
+    width: DEFAULT_WINDOW_WIDTH,
     height: 740,
     resizable: true,
     show: false,
@@ -662,7 +668,7 @@ async function createWindow() {
     // respect it instead of re-measuring and possibly shrinking it back
     // down (still re-clamped to the current screen, in case this launch is
     // on a smaller display than where it was last resized).
-    const width = Math.min(Math.max(360, settings.windowWidth || 480), maxWidth);
+    const width = Math.min(Math.max(360, settings.windowWidth || DEFAULT_WINDOW_WIDTH), maxWidth);
     mainWindow.setContentSize(width, Math.min(Math.max(300, settings.windowHeight), maxHeight));
   } else {
     // First run (or no saved height yet): fit the window to whichever state
@@ -678,7 +684,7 @@ async function createWindow() {
       await new Promise((resolve) => setTimeout(resolve, 50));
       const contentHeight = await mainWindow.webContents.executeJavaScript('document.body.scrollHeight');
       const targetHeight = Math.min(Math.ceil(contentHeight), maxHeight);
-      mainWindow.setContentSize(480, targetHeight);
+      mainWindow.setContentSize(DEFAULT_WINDOW_WIDTH, targetHeight);
     } catch (err) {
       console.error('Could not auto-size window to content:', err);
     }
