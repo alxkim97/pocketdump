@@ -46,6 +46,12 @@ body {
   background: var(--bg);
   color: var(--text);
   transition: background-color 180ms ease, color 180ms ease;
+  /* Keeps the header/grid/footer aligned as one centered column, so a wide
+     window gets balanced margins on both sides instead of the title bar
+     and footer stretching edge-to-edge while just the cards stay capped. */
+  max-width: 1080px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .top-bar {
   display: flex;
@@ -66,7 +72,8 @@ h1 { margin: 0 0 4px; font-size: 20px; }
    into 2+ columns automatically, cutting how much there is to scroll
    without a fixed breakpoint to maintain. align-items:start keeps each
    card its own natural height instead of stretching to match the
-   tallest one in its row. */
+   tallest one in its row. Capped at 3 columns via body's max-width
+   below — beyond that, more/narrower columns just looked scattered. */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));

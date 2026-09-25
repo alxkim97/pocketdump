@@ -45,6 +45,7 @@ let currentAddress = null;
 
 const SETTINGS_PATH = path.join(app.getPath('userData'), 'settings.json');
 const MAX_TEXTS = 50;
+const MAX_TEXT_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 const THUMBNAIL_CACHE_SIZE = 300;
 // Uploads arriving within this long of each other count as one batch for
 // the "files received" notification.
@@ -158,9 +159,18 @@ function getTexts() {
   return loadSettings().texts || [];
 }
 
+// Drops anything older than MAX_TEXT_AGE_MS. Called both when a new text
+// comes in (below) and on a standing timer (see pruneOldTexts's call site
+// near app.whenReady), so old entries actually disappear on a schedule
+// instead of only whenever the next text happens to arrive.
+function pruneOldTexts(texts) {
+  const cutoff = Date.now() - MAX_TEXT_AGE_MS;
+  return texts.filter((entry) => entry.at >= cutoff);
+}
+
 function addText(text, from) {
   const entry = { id: crypto.randomUUID(), text, from, at: Date.now() };
-  const texts = [entry, ...getTexts()].slice(0, MAX_TEXTS);
+  const texts = pruneOldTexts([entry, ...getTexts()]).slice(0, MAX_TEXTS);
   saveSettings({ ...loadSettings(), texts });
   sendToWindow('texts-updated', texts);
   if (from === 'phone') notifyText(text);
@@ -888,6 +898,18 @@ app.whenReady().then(() => {
   // stay open for a while without being relaunched.
   setTimeout(() => checkForUpdates(false), 10_000);
   setInterval(() => checkForUpdates(false), 4 * 60 * 60 * 1000);
+
+  // Texts also get pruned on every new arrival (addText), but the app can
+  // sit open for days without one — this catches entries aging past a week
+  // on their own, instead of only when the next text happens to trigger it.
+  setInterval(() => {
+    const before = getTexts();
+    const after = pruneOldTexts(before);
+    if (after.length !== before.length) {
+      saveSettings({ ...loadSettings(), texts: after });
+      sendToWindow('texts-updated', after);
+    }
+  }, 60 * 60 * 1000);
 });
 
 app.on('before-quit', () => {

@@ -33,27 +33,24 @@
 
   <section class="card">
     <h2>💻 This PC</h2>
-    <details class="hint-details">
-      <summary>Nickname &amp; pairing PIN</summary>
-      <p class="muted">Windows name: <strong id="pc-hostname"></strong></p>
-      <label for="nickname-input" class="muted">Nickname shown on your iPhone</label>
-      <div class="nickname-row">
-        <input id="nickname-input" type="text" maxlength="40" placeholder="e.g. Office" />
-        <button id="save-nickname" type="button">Save</button>
+    <p class="muted">Windows name: <strong id="pc-hostname"></strong></p>
+    <label for="nickname-input" class="muted">Nickname shown on your iPhone</label>
+    <div class="nickname-row">
+      <input id="nickname-input" type="text" maxlength="40" placeholder="e.g. Office" />
+      <button id="save-nickname" type="button">Save</button>
+    </div>
+    <p id="nickname-status" class="muted"></p>
+    <div class="pairing-row">
+      <div>
+        <p class="muted">Pairing PIN</p>
+        <p id="pairing-pin" class="pairing-pin"></p>
       </div>
-      <p id="nickname-status" class="muted"></p>
-      <div class="pairing-row">
-        <div>
-          <p class="muted">Pairing PIN</p>
-          <p id="pairing-pin" class="pairing-pin"></p>
-        </div>
-        <div class="pairing-side">
-          <p id="pairing-count" class="muted"></p>
-          <button id="reset-pairing" class="link" type="button">Unpair all phones</button>
-        </div>
+      <div class="pairing-side">
+        <p id="pairing-count" class="muted"></p>
+        <button id="reset-pairing" class="link" type="button">Unpair all phones</button>
       </div>
-      <p class="muted">Scanning the QR code pairs your iPhone automatically. Otherwise it asks for this PIN once.</p>
-    </details>
+    </div>
+    <p class="muted">Scanning the QR code pairs your iPhone automatically. Otherwise it asks for this PIN once.</p>
   </section>
 
   <section class="card">
