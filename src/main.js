@@ -3,6 +3,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 const crypto = require('crypto');
+const { execFileSync } = require('child_process');
 const QRCode = require('qrcode');
 const { autoUpdater } = require('electron-updater');
 const { Bonjour } = require('bonjour-service');
@@ -13,6 +14,10 @@ const { writeFileAtomic } = require('./fsutil');
 const PORT = 8989;
 const HTTPS_PORT = 8990;
 const MDNS_HOST = 'pocketdump.local';
+// Windows names the "run at login" registry entry after the app's
+// AppUserModelID. Kept as one constant so setAppUserModelId and the
+// startup-entry cleanup below can never drift apart.
+const APP_USER_MODEL_ID = 'com.alexkim.pocketdump';
 // bonjour-service probes for ~1s before announcing; generous margin for
 // slow or busy networks.
 const MDNS_PROBE_TIMEOUT_MS = 5000;
@@ -544,6 +549,40 @@ function stopMdns() {
   instance.unpublishAll(() => instance.destroy());
 }
 
+// A past version's AppUserModelID (or Electron's own auto-generated
+// default before one was ever set) can leave a "run at login" registry
+// entry behind under a name Windows no longer associates with this app —
+// Electron only ever writes its *current* entry, it never removes an old
+// one. Windows still runs every such entry at login, so a leftover means
+// PocketDump launches twice: the second copy loses the single-instance
+// race and quits, but not before that triggers 'second-instance' in the
+// first copy, which shows and focuses its window — defeating "start
+// hidden in the tray". Removes any HKCU Run entry that points at this
+// exe under a name other than the one Electron uses today.
+function cleanupStaleLoginItems() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const exeMarker = path.basename(process.execPath).toLowerCase();
+  const runKey = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run';
+  let output;
+  try {
+    output = execFileSync('reg', ['query', runKey], { encoding: 'utf8', windowsHide: true });
+  } catch {
+    return; // No values under the key at all — nothing to clean up.
+  }
+  for (const line of output.split(/\r?\n/)) {
+    const match = line.trim().match(/^(.+?)\s{2,}(REG_\S+)\s{2,}(.+)$/);
+    if (!match) continue;
+    const [, name, , data] = match;
+    if (name === APP_USER_MODEL_ID || !data.toLowerCase().includes(exeMarker)) continue;
+    try {
+      execFileSync('reg', ['delete', runKey, '/v', name, '/f'], { windowsHide: true });
+      console.log(`Removed a leftover startup entry from an older PocketDump version: ${name}`);
+    } catch (err) {
+      console.error(`Could not remove stale startup entry "${name}":`, err);
+    }
+  }
+}
+
 // Quick, window-free ways to send something from the tray — matches how
 // the app is mostly used (tray-first, main window rarely opened).
 async function sendFileFromTray() {
@@ -893,7 +932,8 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   // Matches the installer's shortcut, so Windows attributes notifications
   // to PocketDump (not "Electron").
-  app.setAppUserModelId('com.alexkim.pocketdump');
+  app.setAppUserModelId(APP_USER_MODEL_ID);
+  cleanupStaleLoginItems();
 
   // Default to starting with Windows, but only ever set this automatically
   // on the very first-ever launch — once the user has an explicit
