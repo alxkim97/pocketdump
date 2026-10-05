@@ -322,6 +322,21 @@
       font-size: 13px;
       margin: 10px 0 0;
     }
+    /* Sticky (not static) so it stays visible regardless of scroll
+       position or which tab is open — this needs to be seen immediately,
+       not discovered by scrolling up. */
+    #unreachable-banner {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: #ff9500;
+      color: #1c1c1e;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      padding: 8px 12px;
+      margin: 0 0 10px;
+    }
     .setup-card a.step-link {
       display: inline-block;
       margin-top: 4px;
@@ -624,6 +639,10 @@
   </style>
 </head>
 <body>
+  <!-- Hidden unless a reachability check (see checkReachable()) fails —
+       catches both "page can't even load this PC's data" and "was fine,
+       then the phone roamed to a different WiFi network mid-session". -->
+  <p id="unreachable-banner" style="display:none"></p>
   <h1>PocketDump</h1>
   <p id="app-version"></p>
   <div id="pc-picker" style="display:none">
@@ -903,6 +922,27 @@
       }
     }
 
+    // --- Reachability banner ---
+    // A dead network (phone on the wrong WiFi, PC asleep, etc.) looks
+    // identical to the page just silently doing nothing — this makes that
+    // state visible instead of leaving someone staring at a stale screen.
+    const unreachableBannerEl = document.getElementById('unreachable-banner');
+
+    async function checkReachable() {
+      try {
+        // Hits whichever PC is currently targeted, not the multi-PC list —
+        // this only needs to answer "can I reach the one I'm using".
+        await fetchJson(`${apiBase}/whoami`, 3000);
+        unreachableBannerEl.style.display = 'none';
+        return true;
+      } catch {
+        unreachableBannerEl.textContent =
+          `⚠️ Can't reach ${currentPcName || 'your PC'} — check your phone is on the same WiFi network as the PC.`;
+        unreachableBannerEl.style.display = 'block';
+        return false;
+      }
+    }
+
     function renderPcPicker() {
       if (pcs.length === 0) {
         pcPickerEl.style.display = 'none';
@@ -1011,8 +1051,18 @@
     // A home-screen web app is often resumed rather than reloaded, so
     // re-check which PCs are around whenever it comes back into view.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') discoverPcs();
+      if (document.visibilityState === 'visible') {
+        discoverPcs();
+        checkReachable();
+      }
     });
+
+    // Also check periodically while the app stays open and in front —
+    // catches the PC/network dropping mid-session without the phone ever
+    // backgrounding (e.g. iOS silently roaming to a different WiFi).
+    setInterval(() => {
+      if (document.visibilityState === 'visible' && currentPcId) checkReachable();
+    }, 20000);
 
     // --- Pairing ---
     const pairCardEl = document.getElementById('pair-card');
@@ -1641,6 +1691,7 @@
       }
       const switched = await discoverPcs();
       if (!switched) onTargetReady();
+      checkReachable();
     }
 
     init();
