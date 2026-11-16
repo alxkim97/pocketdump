@@ -364,6 +364,25 @@ label[for="nickname-input"] {
   border: 1px solid var(--border);
 }
 
+#subfolder-list li { align-items: center; }
+#subfolder-list + .nickname-row { margin-top: 10px; }
+#subfolder-status:not(:empty) { margin-top: 6px; }
+#subfolder-status.error { color: #c62828; }
+[data-theme="dark"] #subfolder-status.error { color: #ff8a80; }
+.subfolder-note { margin-top: 8px; font-size: 12px; }
+.subfolder-rename-input, #subfolder-input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+}
+#subfolder-input { padding: 8px 10px; font-size: 14px; }
+
 .text-send-row {
   display: flex;
   gap: 8px;

@@ -282,7 +282,8 @@ function createPairingLimiter() {
 function startServer({
   port, httpsPort, certOptions, appVersion,
   getDestinationFolder, getSourceFolder, getPcInfo, getPeers,
-  auth, getOutbox, removeOutboxItem, getTexts, addText, getThumbnail, onUpload, onOutboxSent
+  auth, getOutbox, removeOutboxItem, getTexts, addText, getThumbnail, onUpload, onOutboxSent,
+  getSubfolders
 }) {
   const app = express();
   const upload = multer({
@@ -416,16 +417,36 @@ function startServer({
     const lastModified = parseLastModified(req.body.lastModified);
     const manifest = loadManifest(destinationFolder);
 
+    // Only names from the PC's own list are accepted, so a request can
+    // never steer the file anywhere else on disk.
+    let subfolder = null;
+    const requestedSub = String(req.body.subfolder || req.query.subfolder || '').trim();
+    if (requestedSub) {
+      subfolder = (getSubfolders ? getSubfolders() : [])
+        .find((name) => name.toLowerCase() === requestedSub.toLowerCase());
+      if (!subfolder) {
+        fs.rmSync(tmpPath, { force: true });
+        return res.status(400).json({ error: `Sub-folder "${requestedSub}" isn't set up on the PC any more — reload the page.` });
+      }
+    }
+    // Sub-folder sends are deduplicated only against that same sub-folder,
+    // so a photo already sent to the plain date folder can still be filed
+    // there on purpose.
+    const manifestKey = subfolder ? `${hash}|${subfolder.toLowerCase()}` : hash;
+
     // From here to the response is synchronous on purpose: with the phone
     // sending two files at once, no other upload can slip in between
     // picking a free filename and claiming it.
     let result;
-    if (manifest[hash]) {
+    if (manifest[manifestKey]) {
       fs.rmSync(tmpPath, { force: true });
       result = { name: safeName, status: 'duplicate', size };
     } else {
-      const folderName = dateFolderName(lastModified);
-      const targetDir = path.join(destinationFolder, folderName);
+      const dateFolder = dateFolderName(lastModified);
+      const folderName = subfolder ? `${dateFolder}\\${subfolder}` : dateFolder;
+      const targetDir = subfolder
+        ? path.join(destinationFolder, dateFolder, subfolder)
+        : path.join(destinationFolder, dateFolder);
       let targetPath;
       try {
         fs.mkdirSync(targetDir, { recursive: true });
@@ -443,11 +464,12 @@ function startServer({
         // Cosmetic only.
       }
 
-      manifest[hash] = {
+      manifest[manifestKey] = {
         path: path.relative(destinationFolder, targetPath),
         name: safeName,
         size,
-        lastModified
+        lastModified,
+        ...(subfolder ? { subfolder } : {})
       };
 
       result = { name: safeName, status: 'saved', folder: folderName, size };
@@ -458,6 +480,10 @@ function startServer({
 
     if (onUpload) onUpload(result);
     res.json(result);
+  });
+
+  app.get('/subfolders', requireAuth, (req, res) => {
+    res.json({ subfolders: getSubfolders ? getSubfolders() : [] });
   });
 
   // Lets the phone show "last synced X ago" and pre-skip files it already
@@ -476,6 +502,9 @@ function startServer({
     for (const [key, value] of Object.entries(manifest)) {
       if (key === META_KEY) continue;
       count += 1;
+      // The phone pre-skips these signatures on plain sends, so sub-folder
+      // copies stay out of the list (see manifestKey in /upload).
+      if (value && value.subfolder) continue;
       if (value && typeof value === 'object' && value.name && value.size != null && value.lastModified != null) {
         signatures.push(`${value.name}|${value.size}|${value.lastModified}`);
       }

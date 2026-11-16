@@ -191,6 +191,80 @@ document.addEventListener('drop', (e) => {
   if (e.dataTransfer.files.length) window.pocketdump.addOutboxFiles(e.dataTransfer.files);
 });
 
+// --- Sub-folders ---
+const subfolderListEl = document.getElementById('subfolder-list');
+const subfolderInputEl = document.getElementById('subfolder-input');
+const subfolderStatusEl = document.getElementById('subfolder-status');
+
+function showSubfolderResult({ subfolders, error }) {
+  subfolderStatusEl.textContent = error || '';
+  subfolderStatusEl.classList.toggle('error', Boolean(error));
+  renderSubfolders(subfolders);
+  return !error;
+}
+
+function subfolderButton(label, className, onClick) {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  if (className) btn.className = className;
+  btn.textContent = label;
+  btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function renderSubfolders(subfolders) {
+  subfolderListEl.innerHTML = '';
+  subfolders.forEach((name) => {
+    const li = document.createElement('li');
+    const main = document.createElement('span');
+    main.className = 'item-main';
+    main.textContent = name;
+    li.appendChild(main);
+    li.appendChild(subfolderButton('Rename', 'plain', () => startRename(li, name)));
+    li.appendChild(subfolderButton('Remove', 'plain', async () => {
+      if (!confirm(`Remove "${name}" from the list? The folders already on disk stay where they are.`)) return;
+      showSubfolderResult(await window.pocketdump.removeSubfolder(name));
+    }));
+    subfolderListEl.appendChild(li);
+  });
+}
+
+function startRename(li, name) {
+  li.innerHTML = '';
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.maxLength = 60;
+  input.value = name;
+  input.className = 'subfolder-rename-input';
+  input.setAttribute('aria-label', `New name for ${name}`);
+  const save = async () => {
+    if (input.value.trim() === name) return showSubfolderResult(await window.pocketdump.getSubfolders());
+    showSubfolderResult(await window.pocketdump.renameSubfolder(name, input.value));
+  };
+  const cancel = async () => showSubfolderResult(await window.pocketdump.getSubfolders());
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') save();
+    if (e.key === 'Escape') cancel();
+  });
+  li.appendChild(input);
+  li.appendChild(subfolderButton('Save', '', save));
+  li.appendChild(subfolderButton('Cancel', 'plain', cancel));
+  input.focus();
+  input.select();
+}
+
+async function addSubfolder() {
+  if (showSubfolderResult(await window.pocketdump.addSubfolder(subfolderInputEl.value))) {
+    subfolderInputEl.value = '';
+  }
+}
+
+document.getElementById('add-subfolder').addEventListener('click', addSubfolder);
+subfolderInputEl.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') addSubfolder();
+});
+window.pocketdump.getSubfolders().then(showSubfolderResult);
+
 // --- Text & links ---
 const textInputEl = document.getElementById('text-input');
 const textListEl = document.getElementById('text-list');

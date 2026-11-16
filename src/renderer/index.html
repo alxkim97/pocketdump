@@ -66,6 +66,18 @@
   </section>
 
   <section class="card">
+    <h2>🗂️ Sub-folders</h2>
+    <p class="muted">Pick one on your iPhone before sending, and that batch lands in <code>YYYY-MM-DD\&lt;sub-folder&gt;\</code> instead of the date folder itself.</p>
+    <ul id="subfolder-list" class="item-list"></ul>
+    <div class="nickname-row">
+      <input id="subfolder-input" type="text" maxlength="60" placeholder="New sub-folder name" aria-label="New sub-folder name" />
+      <button id="add-subfolder" type="button">Add</button>
+    </div>
+    <p id="subfolder-status" class="muted"></p>
+    <p class="muted subfolder-note">Renaming or removing only affects future sends; folders already on disk stay as they are.</p>
+  </section>
+
+  <section class="card">
     <h2>📤 Share folder <span class="optional-tag">optional</span></h2>
     <p class="muted">Browse &amp; download files from your iPhone.</p>
     <button id="choose-source-folder">Choose folder…</button>

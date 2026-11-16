@@ -172,6 +172,34 @@ function removeOutboxItem(id) {
   saveOutbox((loadSettings().outbox || []).filter((item) => item.id !== id));
 }
 
+// --- Sub-folders ---
+// Optional folders inside a date folder (dumpout\YYYY-MM-DD\<name>\) the
+// phone can pick per send. Stored as the exact on-disk name.
+const DEFAULT_SUBFOLDERS = ['Raw Material'];
+const WINDOWS_RESERVED_NAMES = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\..*)?$/i;
+
+function getSubfolders() {
+  const saved = loadSettings().subfolders;
+  return Array.isArray(saved) ? saved : DEFAULT_SUBFOLDERS.slice();
+}
+
+// Returns an error message, or null if `name` is usable as a Windows
+// folder name and isn't already in `others`.
+function subfolderNameError(name, others) {
+  if (!name) return 'Type a folder name.';
+  if (name.length > 60) return 'Keep it under 60 characters.';
+  if (/[\\/:*?"<>|\x00-\x1f]/.test(name)) return 'Folder names can\'t contain \\ / : * ? " < > |';
+  if (/[. ]$/.test(name)) return 'Folder names can\'t end with a dot or a space.';
+  if (name === '.' || name === '..' || WINDOWS_RESERVED_NAMES.test(name)) return `"${name}" is reserved by Windows.`;
+  if (others.some((other) => other.toLowerCase() === name.toLowerCase())) return `"${name}" is already in the list.`;
+  return null;
+}
+
+function saveSubfolders(subfolders) {
+  saveSettings({ ...loadSettings(), subfolders });
+  return { subfolders };
+}
+
 // --- Text & links ---
 function getTexts() {
   return loadSettings().texts || [];
@@ -783,6 +811,7 @@ async function createWindow() {
     getTexts,
     addText,
     getThumbnail,
+    getSubfolders,
     onUpload: (info) => {
       sendToWindow('upload-event', info);
       noteUploadForNotification(info);
@@ -887,6 +916,29 @@ ipcMain.handle('remove-text', (_event, id) => {
   saveSettings({ ...loadSettings(), texts });
   sendToWindow('texts-updated', texts);
 });
+
+ipcMain.handle('get-subfolders', () => ({ subfolders: getSubfolders() }));
+
+ipcMain.handle('add-subfolder', (_event, name) => {
+  const clean = String(name || '').trim();
+  const list = getSubfolders();
+  const error = subfolderNameError(clean, list);
+  return error ? { error, subfolders: list } : saveSubfolders([...list, clean]);
+});
+
+ipcMain.handle('rename-subfolder', (_event, oldName, newName) => {
+  const clean = String(newName || '').trim();
+  const list = getSubfolders();
+  const index = list.indexOf(String(oldName));
+  if (index === -1) return { error: 'That folder is no longer in the list.', subfolders: list };
+  const error = subfolderNameError(clean, list.filter((_, i) => i !== index));
+  if (error) return { error, subfolders: list };
+  return saveSubfolders(list.map((item, i) => (i === index ? clean : item)));
+});
+
+ipcMain.handle('remove-subfolder', (_event, name) => (
+  saveSubfolders(getSubfolders().filter((item) => item !== String(name)))
+));
 
 ipcMain.handle('copy-text', (_event, text) => clipboard.writeText(String(text || '')));
 

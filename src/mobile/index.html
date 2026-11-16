@@ -108,6 +108,40 @@
     .panel { display: none; text-align: left; }
     .panel.active { display: block; }
 
+    /* Per-send destination: date folder (default) or one of the PC's
+       sub-folders. A picked sub-folder is filled so it's hard to miss. */
+    .subfolder-picker { margin-top: 14px; text-align: center; }
+    .subfolder-picker-label { margin: 0 0 6px; font-size: 13px; }
+    .subfolder-options {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 8px;
+    }
+    .subfolder-btn {
+      min-height: 40px;
+      border: 1px solid var(--border);
+      background: var(--card-bg);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .subfolder-btn.selected {
+      border-color: var(--accent);
+      font-weight: 600;
+      box-shadow: inset 0 0 0 1px var(--accent);
+    }
+    .subfolder-btn.selected.is-sub {
+      background: var(--accent);
+      color: #fff;
+    }
+    .subfolder-btn:disabled { opacity: 0.5; cursor: default; }
+    .subfolder-hint { margin: 8px 0 0; font-size: 13px; }
+    .subfolder-hint strong { color: var(--text); }
+
     .picker {
       display: inline-block;
       margin-top: 16px;
@@ -671,6 +705,7 @@
 
   <div id="send-panel" class="panel active" style="text-align:center">
     <p>Pick photos &amp; videos to send to your PC.</p>
+    <div class="subfolder-picker" style="display:none"></div>
     <label id="file-picker-label" class="picker" for="file-input">Choose photos &amp; videos</label>
     <input id="file-input" type="file" accept="image/*,video/*" multiple />
 
@@ -742,6 +777,7 @@
     <div id="camera-queue-wrap" style="display:none">
       <p id="review-hint" style="display:none">Review your photos below — remove any with ✕, or tap ✎ to realign one — then tap Upload All again to send.</p>
       <div id="camera-queue"></div>
+      <div class="subfolder-picker" style="display:none"></div>
       <div class="camera-actions">
         <button id="camera-upload-btn" class="picker" type="button">Upload All (<span id="camera-count">0</span>)</button>
         <button id="camera-clear-btn" class="secondary-btn" type="button">Clear</button>
@@ -1054,6 +1090,7 @@
       if (document.visibilityState === 'visible') {
         discoverPcs();
         checkReachable();
+        if (currentToken() && !isUploading) loadSubfolders();
       }
     });
 
@@ -1141,6 +1178,7 @@
       hidePairing();
       updateShortcutUrl();
       loadSyncInfo();
+      loadSubfolders();
       if (getPanel.classList.contains('active')) loadGetPanel();
       if (textPanel.classList.contains('active')) loadTexts();
     }
@@ -1230,6 +1268,77 @@
 
     let knownSignatures = new Set();
     let lastFailed = [];
+    let lastFailedSubfolder = '';
+
+    // --- Sub-folder for the next send ---
+    // '' = the date folder itself (today's behaviour). Goes back to '' after
+    // every send, so a later personal batch never lands in a sub-folder.
+    let subfolders = [];
+    let selectedSubfolder = '';
+    const subfolderPickerEls = Array.from(document.querySelectorAll('.subfolder-picker'));
+    const DEFAULT_PICKER_TEXT = 'Choose photos & videos';
+
+    function renderSubfolderPickers() {
+      subfolderPickerEls.forEach((pickerEl) => {
+        pickerEl.innerHTML = '';
+        if (!subfolders.length) {
+          pickerEl.style.display = 'none';
+          return;
+        }
+        const label = document.createElement('p');
+        label.className = 'subfolder-picker-label';
+        label.textContent = 'Save to';
+        const options = document.createElement('div');
+        options.className = 'subfolder-options';
+        options.setAttribute('role', 'radiogroup');
+        options.setAttribute('aria-label', 'Save to');
+        ['', ...subfolders].forEach((name) => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'subfolder-btn'
+            + (name === selectedSubfolder ? ' selected' : '')
+            + (name ? ' is-sub' : '');
+          btn.setAttribute('role', 'radio');
+          btn.setAttribute('aria-checked', String(name === selectedSubfolder));
+          btn.disabled = isUploading;
+          btn.textContent = name || 'Date folder';
+          btn.addEventListener('click', () => {
+            selectedSubfolder = name;
+            renderSubfolderPickers();
+          });
+          options.appendChild(btn);
+        });
+        const hint = document.createElement('p');
+        hint.className = 'subfolder-hint';
+        if (selectedSubfolder) {
+          hint.append('Next send only → ');
+          const strong = document.createElement('strong');
+          strong.textContent = `YYYY-MM-DD\\${selectedSubfolder}\\`;
+          hint.append(strong);
+        } else {
+          hint.textContent = 'Files go straight into their date folder.';
+        }
+        pickerEl.append(label, options, hint);
+        pickerEl.style.display = 'block';
+      });
+      filePickerLabel.textContent = selectedSubfolder
+        ? `Choose photos for ${selectedSubfolder}`
+        : DEFAULT_PICKER_TEXT;
+    }
+
+    async function loadSubfolders() {
+      try {
+        const base = apiBase;
+        const res = await apiFetch('/subfolders');
+        const data = await res.json();
+        if (base !== apiBase) return;
+        subfolders = Array.isArray(data.subfolders) ? data.subfolders : [];
+      } catch {
+        subfolders = []; // Older PocketDump on the PC — no sub-folders there.
+      }
+      if (!subfolders.includes(selectedSubfolder)) selectedSubfolder = '';
+      renderSubfolderPickers();
+    }
     // Called with each file once it's safely on the PC (saved, or already
     // there) — the camera queue uses it to drop only those photos.
     const uploadedListeners = [];
@@ -1286,7 +1395,7 @@
     });
 
     retryBtn.addEventListener('click', () => {
-      if (lastFailed.length) uploadSequentially(lastFailed);
+      if (lastFailed.length) uploadSequentially(lastFailed, lastFailedSubfolder);
     });
 
     function formatSize(bytes) {
@@ -1308,10 +1417,11 @@
       logEl.prepend(div);
     }
 
-    function uploadOne(file, url, onProgress) {
+    function uploadOne(file, url, subfolder, onProgress) {
       return new Promise((resolve, reject) => {
         const formData = new FormData();
         formData.append('lastModified', String(file.lastModified));
+        if (subfolder) formData.append('subfolder', subfolder);
         formData.append('file', file, file.name);
 
         const xhr = new XMLHttpRequest();
@@ -1365,35 +1475,43 @@
       retryBtn.disabled = disabled;
     }
 
-    async function uploadSequentially(files) {
+    async function uploadSequentially(files, subfolder = selectedSubfolder) {
       // One batch at a time: a second one would share (and scramble) the
-      // progress card. The whole batch goes to the PC chosen when it
-      // started; the PC buttons are locked until it's done.
+      // progress card. The whole batch goes to the PC (and sub-folder)
+      // chosen when it started; both pickers are locked until it's done.
       if (isUploading) return;
       const url = apiUrl('/upload');
       isUploading = true;
       renderPcPicker();
+      renderSubfolderPickers();
       setUploadControlsDisabled(true);
       keepScreenAwake(true);
       try {
-        await uploadBatch(files, url);
+        await uploadBatch(files, url, subfolder);
       } finally {
         isUploading = false;
+        // Kept only when something failed, so retrying (or the camera
+        // queue's Upload All) still files the leftovers in the same place.
+        if (!lastFailed.length) selectedSubfolder = '';
         keepScreenAwake(false);
         setUploadControlsDisabled(false);
         renderPcPicker();
+        renderSubfolderPickers();
       }
     }
 
     // Sends PARALLEL_UPLOADS files at a time, with one progress bar for the
     // whole batch by bytes, plus the MB sent and time left.
-    async function uploadBatch(files, url) {
+    async function uploadBatch(files, url, subfolder) {
       card.style.display = 'block';
       summaryEl.textContent = '';
       retryBtn.style.display = 'none';
       logEl.innerHTML = '';
 
-      const toSend = files.filter((file) => !knownSignatures.has(fileSignature(file)));
+      // The phone's "already on PC" list only covers plain date-folder
+      // sends; the PC still skips repeats within the same sub-folder.
+      const isKnown = (file) => !subfolder && knownSignatures.has(fileSignature(file));
+      const toSend = files.filter((file) => !isKnown(file));
       const totalBytes = toSend.reduce((sum, file) => sum + file.size, 0);
       const inFlight = new Map(); // file -> bytes sent so far
       const queue = files.slice();
@@ -1425,7 +1543,7 @@
       async function worker() {
         while (queue.length) {
           const file = queue.shift();
-          if (knownSignatures.has(fileSignature(file))) {
+          if (isKnown(file)) {
             duplicates += 1;
             finished += 1;
             logLine(`${file.name} → already on PC, skipped (no upload needed)`);
@@ -1436,13 +1554,13 @@
           inFlight.set(file, 0);
           updateProgress();
           try {
-            const result = await uploadOne(file, url, (bytes) => {
+            const result = await uploadOne(file, url, subfolder, (bytes) => {
               inFlight.set(file, bytes);
               updateProgress();
             });
             if (result.status === 'saved') {
               saved += 1;
-              knownSignatures.add(fileSignature(file));
+              if (!subfolder) knownSignatures.add(fileSignature(file));
               logLine(`${file.name} → saved to ${result.folder}`);
             } else {
               duplicates += 1;
@@ -1471,9 +1589,10 @@
       const parts = [`${saved} saved`];
       if (duplicates) parts.push(`${duplicates} already on PC`);
       if (failed.length) parts.push(`${failed.length} failed`);
-      summaryEl.textContent = `Done — ${parts.join(', ')}.`;
+      summaryEl.textContent = `Done — ${parts.join(', ')}${subfolder ? ` (${subfolder})` : ''}.`;
 
       lastFailed = failed;
+      lastFailedSubfolder = subfolder || '';
       if (failed.length) {
         retryBtn.textContent = `Retry ${failed.length} failed`;
         retryBtn.style.display = 'block';
