@@ -354,9 +354,11 @@ function startServer({
   // This exact path is also iOS's own implicit fallback convention (it
   // checks here even with no <link> tag at all), so it's served under this
   // name whether or not the page's own <link rel="apple-touch-icon"> loads.
+  // Square on purpose: iOS rounds it itself and fills transparent corners
+  // with black, so the rounded icon.png can't be reused here.
   app.get('/apple-touch-icon.png', (req, res) => {
     res.set('Cache-Control', 'public, max-age=86400');
-    res.sendFile(path.join(__dirname, 'assets', 'icon.png'));
+    res.sendFile(path.join(__dirname, 'assets', 'apple-touch-icon.png'));
   });
 
   // Lets the mobile page discover the HTTPS port for the live-camera view
