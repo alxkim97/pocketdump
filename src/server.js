@@ -74,6 +74,11 @@ function dateFolderName(timestamp) {
   return `${yyyy}-${mm}-${dd}`;
 }
 
+// Same day as dateFolderName, as YYMMDD (the prefix on sub-folder files).
+function shortDatePrefix(timestamp) {
+  return dateFolderName(timestamp).replace(/-/g, '').slice(2);
+}
+
 // The phone page sends milliseconds; an iOS Shortcut sends the photo's
 // creation date as text (ISO 8601, or iOS's "Sep 24, 2026 at 7:38 PM").
 function parseLastModified(value) {
@@ -444,15 +449,20 @@ function startServer({
       fs.rmSync(tmpPath, { force: true });
       result = { name: safeName, status: 'duplicate', size };
     } else {
+      // Plain sends go to the date folder (YYYY-MM-DD). A sub-folder is one
+      // fixed folder at the top of the destination (e.g. dumpout\Raw Material\),
+      // and each file in it carries the same date as a YYMMDD prefix:
+      // "261120 IMG_3701.jpeg".
       const dateFolder = dateFolderName(lastModified);
-      const folderName = subfolder ? `${dateFolder}\\${subfolder}` : dateFolder;
+      const folderName = subfolder || dateFolder;
       const targetDir = subfolder
-        ? path.join(destinationFolder, dateFolder, subfolder)
+        ? path.join(destinationFolder, subfolder)
         : path.join(destinationFolder, dateFolder);
+      const targetName = subfolder ? `${shortDatePrefix(lastModified)} ${safeName}` : safeName;
       let targetPath;
       try {
         fs.mkdirSync(targetDir, { recursive: true });
-        targetPath = uniqueFilePath(targetDir, safeName);
+        targetPath = uniqueFilePath(targetDir, targetName);
         fs.renameSync(tmpPath, targetPath);
       } catch (err) {
         fs.rm(tmpPath, { force: true }, () => {});

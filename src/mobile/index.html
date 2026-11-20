@@ -1313,7 +1313,7 @@
         if (selectedSubfolder) {
           hint.append('Next send only → ');
           const strong = document.createElement('strong');
-          strong.textContent = `YYYY-MM-DD\\${selectedSubfolder}\\`;
+          strong.textContent = `${selectedSubfolder}\\YYMMDD name`;
           hint.append(strong);
         } else {
           hint.textContent = 'Files go straight into their date folder.';
